@@ -36,5 +36,35 @@ mod tests {
         assert_eq!(tokens.len(), 1);
         assert_eq!(tokens[0], Token::String("hello world".to_string()));
     }
+    #[test]
+    fn test_empty_string() {
+        let tokens = tokenize(r#""""#);
+
+        assert_eq!(tokens.len(), 1);
+        assert_eq!(tokens[0], Token::String("".to_string()));
+    }
+
+    #[test]
+    fn test_string_containing_json_special_chars() {
+        let tokens = tokenize(r#""{key: value}""#);
+
+        assert_eq!(tokens.len(), 1);
+        assert_eq!(tokens[0], Token::String("{key: value}".to_string()));
+    }
+
+    #[test]
+    fn test_string_with_keyword_like_content() {
+        let tokens = tokenize(r#""not true or false""#);
+
+        assert_eq!(tokens.len(), 1);
+        assert_eq!(tokens[0], Token::String("not true or false".to_string()));
+    }
+
+    #[test]
+    fn test_string_with_number_like_content(){
+        let tokens = tokenize(r#""phone: 555-1234""#);
+        assert_eq!(tokens.len(), 1);
+        assert_eq!(tokens[0], Token::String("phone: 555-1234".to_string()));
+    }
 }
 
