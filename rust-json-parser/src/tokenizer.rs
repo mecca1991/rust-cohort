@@ -9,7 +9,7 @@ pub enum Token {
     String(String),
     Number(f64),
     Boolean(bool),
-    Null
+    Null,
 }
 
 pub fn tokenize(input: &str) -> Vec<Token> {
@@ -34,12 +34,20 @@ pub fn tokenize(input: &str) -> Vec<Token> {
                     nchar = chars.next().expect("u");
                 }
                 tokens.push(Token::String(collected));
-            }
-            ch if ('0'..='9').contains(&ch) | (ch == '-') | (ch == '.') => {
+            },
+            ':' => {
+                tokens.push(Token::Colon);
+                chars.next();
+            },
+            ',' => {
+                tokens.push(Token::Comma);
+                chars.next();
+            },
+            ch if ch.is_numeric() | (ch == '-') | (ch == '.') => {
                 let mut num_string = String::new();
                 chars.next();
                 let mut nchar = ch;
-                while ('0'..='9').contains(&nchar) | (nchar == '-') | (nchar == '.') {
+                while &nchar.is_numeric() | (nchar == '-') | (nchar == '.') {
                     if num_string.starts_with(".") {
                         num_string.clear();
                         break;
@@ -48,7 +56,9 @@ pub fn tokenize(input: &str) -> Vec<Token> {
                     let next = chars.peek();
                     if next.is_some() {
                         nchar = *next.expect("msg");
-                        chars.next();
+                        if nchar.is_numeric() || nchar == '.' || nchar == '-' {
+                            chars.next();
+                        } 
                     } else {
                         break;
                     }
@@ -56,7 +66,7 @@ pub fn tokenize(input: &str) -> Vec<Token> {
                 if !num_string.is_empty() {
                     tokens.push(Token::Number(num_string.parse::<f64>().unwrap()));
                 }
-            },
+            }
             ch if ch.is_alphabetic() => {
                 let mut current_char = ch;
                 chars.next();
@@ -73,8 +83,11 @@ pub fn tokenize(input: &str) -> Vec<Token> {
                     let next_char = chars.peek();
                     if next_char.is_some() {
                         current_char = *next_char.expect("msg");
-                        chars.next();
-
+                        if current_char.is_alphabetic() {
+                            chars.next();
+                        } else {
+                            break;
+                        }
                     } else {
                         break;
                     }
@@ -84,9 +97,10 @@ pub fn tokenize(input: &str) -> Vec<Token> {
                 } else if valid_vals.contains(&&bool_str) {
                     tokens.push(Token::Boolean(bool_str.parse().unwrap()));
                     bool_str.clear();
-                } 
+                }
             }
             _ => {
+                println!("TOKEN SKIPPED {:?}", chars.peek());
                 chars.next();
             }
         }

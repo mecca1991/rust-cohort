@@ -104,4 +104,27 @@ mod tests {
         assert_eq!(tokens[1], Token::Boolean(false));
         assert_eq!(tokens[2], Token::Null)
     }
+
+    #[test]
+    fn test_simple_object() {
+        let tokens = tokenize(r#"{"name": "Alice"}"#);
+
+        assert_eq!(tokens.len(), 5);
+        assert_eq!(tokens[0], Token::LeftBrace);
+        assert_eq!(tokens[1], Token::String("name".to_string()));
+        assert_eq!(tokens[2], Token::Colon);
+        assert_eq!(tokens[3], Token::String("Alice".to_string()));
+        assert_eq!(tokens[4], Token::RightBrace);
+    }
+
+    #[test]
+    fn test_multiple_values() {
+        let tokens = tokenize(r#"{"age": 30, "active": true}"#);
+
+        assert!(tokens.contains(&Token::String("age".to_string())));
+        assert!(tokens.contains(&Token::Number(30.0)));
+        assert!(tokens.contains(&Token::Comma));
+        assert!(tokens.contains(&Token::String("active".to_string())));
+        assert!(tokens.contains(&Token::Boolean(true)));
+    }
 }
