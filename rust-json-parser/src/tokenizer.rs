@@ -9,6 +9,7 @@ pub enum Token {
     String(String),
     Number(f64),
     Boolean(bool),
+    Null
 }
 
 pub fn tokenize(input: &str) -> Vec<Token> {
@@ -55,6 +56,35 @@ pub fn tokenize(input: &str) -> Vec<Token> {
                 if !num_string.is_empty() {
                     tokens.push(Token::Number(num_string.parse::<f64>().unwrap()));
                 }
+            },
+            ch if ch.is_alphabetic() => {
+                let mut current_char = ch;
+                chars.next();
+                let true_str = "true".to_string();
+                let false_str = "false".to_string();
+                let null_str = "null".to_string();
+
+                let valid_vals = vec![&true_str, &false_str];
+
+                let mut bool_str = String::new();
+
+                while !valid_vals.contains(&&bool_str) {
+                    bool_str.push(current_char);
+                    let next_char = chars.peek();
+                    if next_char.is_some() {
+                        current_char = *next_char.expect("msg");
+                        chars.next();
+
+                    } else {
+                        break;
+                    }
+                }
+                if &bool_str == &null_str {
+                    tokens.push(Token::Null);
+                } else if valid_vals.contains(&&bool_str) {
+                    tokens.push(Token::Boolean(bool_str.parse().unwrap()));
+                    bool_str.clear();
+                } 
             }
             _ => {
                 chars.next();

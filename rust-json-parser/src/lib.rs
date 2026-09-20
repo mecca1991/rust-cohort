@@ -95,4 +95,13 @@ mod tests {
         let tokens = tokenize(".5");
         assert!(!tokens.contains(&Token::Number(0.5)))
     }
+
+    #[test]
+    fn test_boolean_and_null() {
+        let tokens = tokenize("true false null");
+        assert_eq!(tokens.len(), 3);
+        assert_eq!(tokens[0], Token::Boolean(true));
+        assert_eq!(tokens[1], Token::Boolean(false));
+        assert_eq!(tokens[2], Token::Null)
+    }
 }
