@@ -100,7 +100,6 @@ pub fn tokenize(input: &str) -> Vec<Token> {
                 }
             }
             _ => {
-                println!("TOKEN SKIPPED {:?}", chars.peek());
                 chars.next();
             }
         }
