@@ -1,4 +1,3 @@
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
     LeftBrace,
@@ -8,8 +7,8 @@ pub enum Token {
     Comma,
     Colon,
     String(String),
-    Number,
-    Boolean
+    Number(f64),
+    Boolean(bool),
 }
 
 pub fn tokenize(input: &str) -> Vec<Token> {
@@ -20,22 +19,43 @@ pub fn tokenize(input: &str) -> Vec<Token> {
             '{' => {
                 tokens.push(Token::LeftBrace);
                 chars.next();
-            },
+            }
             '}' => {
                 tokens.push(Token::RightBrace);
                 chars.next();
-
-            },
-            '"' => { 
+            }
+            '"' => {
                 chars.next();
                 let mut collected = String::new();
                 let mut nchar = chars.next().expect("Val");
-                while nchar != '"' { 
+                while nchar != '"' {
                     collected.push(nchar);
                     nchar = chars.next().expect("u");
                 }
                 tokens.push(Token::String(collected));
-            },
+            }
+            ch if ('0'..='9').contains(&ch) | (ch == '-') | (ch == '.') => {
+                let mut num_string = String::new();
+                chars.next();
+                let mut nchar = ch;
+                while ('0'..='9').contains(&nchar) | (nchar == '-') | (nchar == '.') {
+                    if num_string.starts_with(".") {
+                        num_string.clear();
+                        break;
+                    }
+                    num_string.push(nchar);
+                    let next = chars.peek();
+                    if next.is_some() {
+                        nchar = *next.expect("msg");
+                        chars.next();
+                    } else {
+                        break;
+                    }
+                }
+                if !num_string.is_empty() {
+                    tokens.push(Token::Number(num_string.parse::<f64>().unwrap()));
+                }
+            }
             _ => {
                 chars.next();
             }
