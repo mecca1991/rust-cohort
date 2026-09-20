@@ -7,7 +7,7 @@ pub enum Token {
     RightBracket,
     Comma,
     Colon,
-    String,
+    String(String),
     Number,
     Boolean
 }
@@ -26,8 +26,18 @@ pub fn tokenize(input: &str) -> Vec<Token> {
                 chars.next();
 
             },
+            '"' => { 
+                chars.next();
+                let mut collected = String::new();
+                let mut nchar = chars.next().expect("Val");
+                while nchar != '"' { 
+                    collected.push(nchar);
+                    nchar = chars.next().expect("u");
+                }
+                tokens.push(Token::String(collected));
+            },
             _ => {
-                println!("Nothing Done");
+                chars.next();
             }
         }
     }
