@@ -51,7 +51,7 @@ pub fn tokenize(input: &str) -> Vec<Token> {
                 tokens.push(Token::Comma);
                 chars.next();
             }
-            ch if ch.is_numeric() | (ch == '-') | (ch == '.') => {
+            ch if ch.is_numeric() || (ch == '-') || (ch == '.') => {
                 let mut num_string = String::new();
                 chars.next();
                 let mut nchar = ch;
