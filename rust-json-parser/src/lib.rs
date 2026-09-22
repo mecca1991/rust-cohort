@@ -1,20 +1,10 @@
 pub mod tokenizer;
 
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
-
 #[cfg(test)]
 mod tests {
-    use super::*;
+
     use crate::tokenizer::Token;
     use crate::tokenizer::tokenize;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
 
     #[test]
     fn test_empty_braes() {
@@ -126,5 +116,14 @@ mod tests {
         assert!(tokens.contains(&Token::Comma));
         assert!(tokens.contains(&Token::String("active".to_string())));
         assert!(tokens.contains(&Token::Boolean(true)));
+    }
+
+    #[test]
+    fn test_json_with_brackets() {
+        let tokens = tokenize(r#"{"age": 30, "children_names": ["Naia", "Bryan"]}"#);
+
+        assert_eq!(tokens.len(), 13);
+        assert_eq!(tokens[7], Token::LeftBracket);
+        assert_eq!(tokens[11], Token::RightBracket);
     }
 }
