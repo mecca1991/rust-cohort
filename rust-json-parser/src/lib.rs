@@ -126,4 +126,10 @@ mod tests {
         assert_eq!(tokens[7], Token::LeftBracket);
         assert_eq!(tokens[11], Token::RightBracket);
     }
+    #[test]
+    fn test_unterminated_string_does_not_panic() {
+        let tokens = tokenize(r#""hello"#);
+        assert_eq!(tokens.len(), 1);
+        assert_eq!(tokens[0], Token::String("hello".to_string()));
+    }
 }

@@ -33,16 +33,6 @@ pub fn tokenize(input: &str) -> Vec<Token> {
                 tokens.push(Token::RightBracket);
                 chars.next();
             }
-            '"' => {
-                chars.next();
-                let mut collected = String::new();
-                let mut nchar = chars.next().unwrap();
-                while nchar != '"' {
-                    collected.push(nchar);
-                    nchar = chars.next().unwrap();
-                }
-                tokens.push(Token::String(collected));
-            }
             ':' => {
                 tokens.push(Token::Colon);
                 chars.next();
@@ -51,22 +41,26 @@ pub fn tokenize(input: &str) -> Vec<Token> {
                 tokens.push(Token::Comma);
                 chars.next();
             }
-            ch if ch.is_numeric() || (ch == '-') || (ch == '.') => {
-                let mut num_string = String::new();
+            '"' => {
                 chars.next();
-                let mut nchar = ch;
-                while nchar.is_numeric() || (nchar == '-') || (nchar == '.') {
-                    if num_string.starts_with(".") {
-                        num_string.clear();
+                let mut collected = String::new();
+                for nchar in chars.by_ref() {
+                    if nchar == '"' {
                         break;
                     }
-                    num_string.push(nchar);
-                    let next = chars.peek();
-                    if next.is_some() {
-                        nchar = *next.unwrap();
-                        if nchar.is_numeric() || nchar == '.' || nchar == '-' {
-                            chars.next();
+                    collected.push(nchar);
+                }
+                tokens.push(Token::String(collected));
+            }
+            ch if ch.is_numeric() || (ch == '-') || (ch == '.') => {
+                let mut num_string: String = String::new();
+                while let Some(value) = chars.peek() {
+                    if value.is_numeric() || ['-', '.'].contains(value) {
+                        num_string.push(*value);
+                        if num_string.starts_with(".") {
+                            num_string.clear();
                         }
+                        chars.next();
                     } else {
                         break;
                     }
@@ -78,39 +72,32 @@ pub fn tokenize(input: &str) -> Vec<Token> {
                 }
             }
             ch if ch == 't' || ch == 'f' || ch == 'n' => {
-                let mut current_char = ch;
-                chars.next();
-
-                let valid_vals = vec!["true".to_string(), "false".to_string()];
-
-                let mut bool_str = String::new();
-
-                while !valid_vals.contains(&bool_str) {
-                    bool_str.push(current_char);
-                    let next_char = chars.peek();
-                    if next_char.is_some() {
-                        current_char = *next_char.unwrap();
-                        if current_char.is_alphabetic() {
-                            chars.next();
-                        } else {
-                            break;
-                        }
-                    } else {
-                        break;
+                let mut match_str = String::new();
+                let boolean_values = ["true".to_string(), "false".to_string()];
+                while let Some(nchar) = chars.peek() {
+                    if nchar.is_alphabetic() && !boolean_values.contains(&match_str) {
+                        match_str.push(*nchar);
                     }
+                    if &match_str == "null" {
+                        tokens.push(Token::Null);
+                        match_str.clear();
+                    }
+                    if boolean_values.contains(&match_str) {
+                        tokens.push(Token::Boolean(
+                            match_str.parse().expect("Invalid Boolean value"),
+                        ));
+                        match_str.clear();
+                    }
+                    chars.next();
                 }
-                if &bool_str == "null" {
-                    tokens.push(Token::Null);
-                } else if valid_vals.contains(&&bool_str) {
-                    tokens.push(Token::Boolean(bool_str.parse().unwrap()));
-                    bool_str.clear();
-                }
+            }
+            ' ' => {
+                chars.next();
             }
             _ => {
                 println!("Token {ch} skipped...");
-                chars.next();
             }
         }
     }
-    return tokens;
+    tokens
 }
