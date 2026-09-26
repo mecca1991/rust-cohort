@@ -1,4 +1,6 @@
 mod error;
+mod value;
+mod parser;
 
 use rust_json_parser::tokenizer::tokenize;
 
