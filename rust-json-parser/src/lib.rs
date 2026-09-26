@@ -2,7 +2,7 @@ pub mod tokenizer;
 
 #[cfg(test)]
 mod tests {
-
+    
     use crate::tokenizer::Token;
     use crate::tokenizer::tokenize;
 
