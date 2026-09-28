@@ -1,9 +1,9 @@
-mod error;
+pub mod error;
 mod value;
 mod parser;
 mod tokenizer;
 
-use rust_json_parser::tokenizer::tokenize;
+use tokenizer::tokenize;
 
 use crate::parser::parse_json;
 

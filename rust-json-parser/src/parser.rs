@@ -1,6 +1,6 @@
 use crate::error::JsonError;
 use crate::tokenizer::{Token, tokenize};
-use crate::value::{self, JsonValue};
+use crate::value::{JsonValue};
 
 
 type Result<T> = std::result::Result<T, JsonError>;
@@ -8,7 +8,7 @@ type Result<T> = std::result::Result<T, JsonError>;
 
 pub fn parse_json(input: &str) -> Result<JsonValue> {
     let input = input.trim();
-    let tokens = tokenize(input);
+    let tokens = tokenize(input)?;
     let token = tokens.get(0);
 
     if let Some(token) = token {
@@ -32,20 +32,6 @@ pub fn parse_json(input: &str) -> Result<JsonValue> {
             }
             Token::Null => {
                 Ok(JsonValue::Null)
-            }
-            Token::Unknown(value) => {
-                if value == "@" {
-                    Err(JsonError::UnexpectedToken { 
-                        expected: "JSON value".to_string(), 
-                        found: value.to_string(),
-                        position: 0
-                    })
-                } else {
-                    Err(JsonError::UnexpectedEndOfInput { 
-                        expected: "JSON value".to_string(), 
-                        position: 0 
-                    })
-                }
             }
             _ => Err(JsonError::UnexpectedEndOfInput { 
                 expected: "JSON value".to_string(), 
@@ -148,6 +134,23 @@ mod test {
         match result {
             Err(JsonError::UnexpectedToken { .. }) => {}, // Expected
             _ => panic!("Expected UnexpectedToken error"),
+        }
+    }
+    #[test]
+    fn test_leading_decimal_not_a_number() {
+        // .5 is invalid JSON - numbers must have leading digit (0.5 is valid)
+        let err = tokenize(".5").unwrap_err();
+        assert!(matches!(err, JsonError::UnexpectedToken { position: 0, .. }));
+    }
+
+    #[test]
+    fn test_unterminated_string() {
+        let err = tokenize(r#""missing end quote"#).unwrap_err();
+        match err {
+            JsonError::UnexpectedEndOfInput { position, .. } => {
+                assert_eq!(position, 0);
+            }
+            other => panic!("expected UnexpectedEndOfInput, got {:?}", other),
         }
     }
 }

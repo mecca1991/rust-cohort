@@ -1,4 +1,4 @@
-use crate::tokenizer::Token::Unknown;
+use crate::error::JsonError;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
@@ -11,38 +11,44 @@ pub enum Token {
     String(String),
     Number(f64),
     Boolean(bool),
-    Null,
-    Unknown(String)
+    Null
 }
 
-pub fn tokenize(input: &str) -> Vec<Token> {
+pub fn tokenize(input: &str) -> Result<Vec<Token>, JsonError> {
     let mut tokens: Vec<Token> = Vec::new();
     let mut chars = input.chars().peekable();
+    let mut token_position = 0;
     while let Some(&ch) = chars.peek() {
         match ch {
             '{' => {
                 tokens.push(Token::LeftBrace);
                 chars.next();
+                token_position += 1;
             }
             '}' => {
                 tokens.push(Token::RightBrace);
                 chars.next();
+                token_position += 1;
             }
             '[' => {
                 tokens.push(Token::LeftBracket);
                 chars.next();
+                token_position += 1;
             }
             ']' => {
                 tokens.push(Token::RightBracket);
                 chars.next();
+                token_position += 1;
             }
             ':' => {
                 tokens.push(Token::Colon);
                 chars.next();
+                token_position += 1;
             }
             ',' => {
                 tokens.push(Token::Comma);
                 chars.next();
+                token_position += 1;
             }
             '"'  => {
                 chars.next();
@@ -52,20 +58,26 @@ pub fn tokenize(input: &str) -> Vec<Token> {
                         break;
                     }
                     collected.push(nchar);
+                    token_position += 1;
                 }
                 tokens.push(Token::String(collected));
             }
             ch if ch.is_numeric() || (ch == '-') || (ch == '.') => {
                 let mut num_string: String = String::new();
                 while let Some(value) = chars.peek() {
-                    if value.is_numeric() || ['-', '.'].contains(value) {
+                    if (value.is_numeric() || ['-', '.'].contains(value)) && !num_string.starts_with(".") {
                         num_string.push(*value);
-                        if num_string.starts_with(".") {
-                            num_string.clear();
-                        }
                         chars.next();
+                        token_position += 1;
                     } else {
                         break;
+                    }
+                    if num_string.starts_with(".") {
+                     return Err(JsonError::UnexpectedToken { 
+                            position: 0,
+                            expected: "JSON Value".to_string(), 
+                            found: ".".to_string(), 
+                        });
                     }
                 }
                 if !num_string.is_empty() {
@@ -92,16 +104,87 @@ pub fn tokenize(input: &str) -> Vec<Token> {
                         match_str.clear();
                     }
                     chars.next();
+                    token_position += 1;
                 }
             }
             ' ' => {
                 chars.next();
+                token_position += 1;
             }
             _ => {
-                tokens.push(Unknown(ch.to_string()));
-                chars.next();
+                return Err(JsonError::UnexpectedToken { 
+                    expected: "JSON value".to_string(), 
+                    found: ch.to_string(),
+                    position: token_position
+                })
             }
         }
     }
-    tokens
+    Ok(tokens)
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Result type alias for cleaner test signatures
+    type Result<T> = std::result::Result<T, JsonError>;
+
+    // Tests will be added at each step below.
+    // String boundary tests - verify inner vs outer quote handling
+
+    #[test]
+    fn test_empty_string() -> Result<()> {
+        // Outer boundary: adjacent quotes with no inner content
+        let tokens = tokenize(r#""""#)?;
+        assert_eq!(tokens.len(), 1);
+        assert_eq!(tokens[0], Token::String("".to_string()));
+        Ok(())
+    }
+
+    #[test]
+    fn test_string_containing_json_special_chars() -> Result<()> {
+        // Inner handling: JSON delimiters inside strings don't break tokenization
+        let tokens = tokenize(r#""{key: value}""#)?;
+        assert_eq!(tokens.len(), 1);
+        assert_eq!(tokens[0], Token::String("{key: value}".to_string()));
+        Ok(())
+    }
+
+    #[test]
+    fn test_string_with_keyword_like_content() -> Result<()> {
+        // Inner handling: "true", "false", "null" inside strings stay as string content
+        let tokens = tokenize(r#""not true or false""#)?;
+        assert_eq!(tokens.len(), 1);
+        assert_eq!(tokens[0], Token::String("not true or false".to_string()));
+        Ok(())
+    }
+
+    #[test]
+    fn test_string_with_number_like_content() -> Result<()> {
+        // Inner handling: numeric content inside strings doesn't become Number tokens
+        let tokens = tokenize(r#""phone: 555-1234""#)?;
+        assert_eq!(tokens.len(), 1);
+        assert_eq!(tokens[0], Token::String("phone: 555-1234".to_string()));
+        Ok(())
+    }
+
+    // Number parsing tests
+
+    #[test]
+    fn test_negative_number() -> Result<()> {
+        let tokens = tokenize("-42")?;
+        assert_eq!(tokens.len(), 1);
+        assert_eq!(tokens[0], Token::Number(-42.0));
+        Ok(())
+    }
+
+    #[test]
+    fn test_decimal_number() -> Result<()> {
+        let tokens = tokenize("0.5")?;
+        assert_eq!(tokens.len(), 1);
+        assert_eq!(tokens[0], Token::Number(0.5));
+        Ok(())
+    }
 }
