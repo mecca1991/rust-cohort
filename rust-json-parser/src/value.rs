@@ -1,5 +1,5 @@
 #[derive(Debug, Clone, PartialEq)]
-enum JsonValue {
+pub enum JsonValue {
     Null,
     Boolean(bool),
     Number(f64),

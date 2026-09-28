@@ -1,3 +1,5 @@
+use crate::tokenizer::Token::Unknown;
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
     LeftBrace,
@@ -10,6 +12,7 @@ pub enum Token {
     Number(f64),
     Boolean(bool),
     Null,
+    Unknown(String)
 }
 
 pub fn tokenize(input: &str) -> Vec<Token> {
@@ -41,7 +44,7 @@ pub fn tokenize(input: &str) -> Vec<Token> {
                 tokens.push(Token::Comma);
                 chars.next();
             }
-            '"' => {
+            '"'  => {
                 chars.next();
                 let mut collected = String::new();
                 for nchar in chars.by_ref() {
@@ -95,7 +98,8 @@ pub fn tokenize(input: &str) -> Vec<Token> {
                 chars.next();
             }
             _ => {
-                println!("Token {ch} skipped...");
+                tokens.push(Unknown(ch.to_string()));
+                chars.next();
             }
         }
     }
