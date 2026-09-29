@@ -1,18 +1,13 @@
-pub mod error;
-mod value;
-mod parser;
-mod tokenizer;
+use rust_json_parser::parse_json;
 
-use tokenizer::tokenize;
 
-use crate::parser::parse_json;
+
 
 fn main() {
-    let input = r#"{"age": 30, "children_names": ["Naia", "Bryan"]}"#;
+    let input = r#""The quick brown fox jumps over the lazy dog""#;
 
-    let tokens = tokenize(input);
-    let resp = parse_json(input);
-    println!("Input JSON: {:?}", resp);
+    let result = parse_json(input);
+    println!("Input JSON: {:?}", result);
     println!("\nTokens:");
-    println!("{:?}", tokens);
+    println!("{:?}", result);
 }
