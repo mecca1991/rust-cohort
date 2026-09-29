@@ -1,8 +1,5 @@
 use rust_json_parser::parse_json;
 
-
-
-
 fn main() {
     let input = r#""The quick brown fox jumps over the lazy dog""#;
 

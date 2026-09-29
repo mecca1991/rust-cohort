@@ -11,7 +11,7 @@ pub enum Token {
     String(String),
     Number(f64),
     Boolean(bool),
-    Null
+    Null,
 }
 
 pub fn tokenize(input: &str) -> Result<Vec<Token>, JsonError> {
@@ -50,7 +50,7 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, JsonError> {
                 chars.next();
                 token_position += 1;
             }
-            '"'  => {
+            '"' => {
                 let mut str_quotes = String::new();
                 str_quotes.push(ch);
                 chars.next();
@@ -58,22 +58,25 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, JsonError> {
                 for nchar in chars.by_ref() {
                     if nchar == '"' {
                         str_quotes.push(ch);
-                        break;  
+                        break;
                     }
                     collected.push(nchar);
                     token_position += 1;
                 }
                 if str_quotes.len() < 2 {
-                    return Err(JsonError::UnexpectedEndOfInput { 
-                        expected: "JSON value".to_string(), position: 0
-                    })
+                    return Err(JsonError::UnexpectedEndOfInput {
+                        expected: "JSON value".to_string(),
+                        position: 0,
+                    });
                 }
                 tokens.push(Token::String(collected));
             }
             ch if ch.is_numeric() || (ch == '-') || (ch == '.') => {
                 let mut num_string: String = String::new();
                 while let Some(value) = chars.peek() {
-                    if (value.is_numeric() || ['-', '.'].contains(value)) && !num_string.starts_with(".") {
+                    if (value.is_numeric() || ['-', '.'].contains(value))
+                        && !num_string.starts_with(".")
+                    {
                         num_string.push(*value);
                         chars.next();
                         token_position += 1;
@@ -81,10 +84,10 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, JsonError> {
                         break;
                     }
                     if num_string.starts_with(".") {
-                     return Err(JsonError::UnexpectedToken { 
+                        return Err(JsonError::UnexpectedToken {
                             position: 0,
-                            expected: "JSON Value".to_string(), 
-                            found: ".".to_string(), 
+                            expected: "JSON Value".to_string(),
+                            found: ".".to_string(),
                         });
                     }
                 }
@@ -120,17 +123,16 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, JsonError> {
                 token_position += 1;
             }
             _ => {
-                return Err(JsonError::UnexpectedToken { 
-                    expected: "valid JSON token".to_string(), 
+                return Err(JsonError::UnexpectedToken {
+                    expected: "valid JSON token".to_string(),
                     found: ch.to_string(),
-                    position: token_position
-                })
+                    position: token_position,
+                });
             }
         }
     }
     Ok(tokens)
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -149,7 +151,6 @@ mod tests {
         assert_eq!(tokens[0], Token::LeftBrace);
         assert_eq!(tokens[1], Token::RightBrace);
         Ok(())
-
     }
     #[test]
     fn test_simple_string() -> Result<()> {
@@ -159,7 +160,7 @@ mod tests {
         Ok(())
     }
     #[test]
-    fn test_tokenize_string() -> Result<()>  {
+    fn test_tokenize_string() -> Result<()> {
         let tokens = tokenize(r#""hello world""#)?;
 
         assert_eq!(tokens.len(), 1);
@@ -167,7 +168,7 @@ mod tests {
         Ok(())
     }
     #[test]
-    fn test_empty_string() -> Result<()>  {
+    fn test_empty_string() -> Result<()> {
         let tokens = tokenize(r#""""#)?;
 
         assert_eq!(tokens.len(), 1);
@@ -185,7 +186,7 @@ mod tests {
     }
 
     #[test]
-    fn test_string_with_keyword_like_content()-> Result<()> {
+    fn test_string_with_keyword_like_content() -> Result<()> {
         let tokens = tokenize(r#""not true or false""#)?;
 
         assert_eq!(tokens.len(), 1);
@@ -194,7 +195,7 @@ mod tests {
     }
 
     #[test]
-    fn test_string_with_number_like_content() -> Result<()>  {
+    fn test_string_with_number_like_content() -> Result<()> {
         let tokens = tokenize(r#""phone: 555-1234""#)?;
         assert_eq!(tokens.len(), 1);
         assert_eq!(tokens[0], Token::String("phone: 555-1234".to_string()));
@@ -202,7 +203,7 @@ mod tests {
     }
 
     #[test]
-    fn test_number() -> Result<()>  {
+    fn test_number() -> Result<()> {
         let tokens = tokenize("42")?;
 
         assert_eq!(tokens.len(), 1);
@@ -228,7 +229,7 @@ mod tests {
     }
 
     #[test]
-    fn test_leading_decimal_number() -> Result<()>  {
+    fn test_leading_decimal_number() -> Result<()> {
         let res = tokenize(".5");
         assert!(res.is_err());
 
@@ -271,7 +272,7 @@ mod tests {
     }
 
     #[test]
-    fn test_json_with_brackets() -> Result<()>  {
+    fn test_json_with_brackets() -> Result<()> {
         let tokens = tokenize(r#"{"age": 30, "children_names": ["Naia", "Bryan"]}"#)?;
 
         assert_eq!(tokens.len(), 13);
