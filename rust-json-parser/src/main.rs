@@ -7,7 +7,12 @@ fn main() {
     let input = r#""The quick brown fox jumps over the lazy dog""#;
 
     let result = parse_json(input);
-    println!("Input JSON: {:?}", result);
-    println!("\nTokens:");
-    println!("{:?}", result);
+    match result {
+        Ok(result) => {
+            println!("The result is: \n{:?}", result)
+        }
+        Err(result) => {
+            println!("An error occured! \n{:?}", result)
+        }
+    }
 }

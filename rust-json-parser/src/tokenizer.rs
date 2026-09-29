@@ -64,7 +64,6 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, JsonError> {
                     token_position += 1;
                 }
                 if str_quotes.len() < 2 {
-                    println!("Hello This is the string {}", str_quotes);
                     return Err(JsonError::UnexpectedEndOfInput { 
                         expected: "JSON value".to_string(), position: 0
                     })
