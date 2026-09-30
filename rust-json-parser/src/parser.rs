@@ -1,10 +1,8 @@
 use crate::error::JsonError;
 use crate::tokenizer::{Token, tokenize};
-use crate::value::{JsonValue};
-
+use crate::value::JsonValue;
 
 type Result<T> = std::result::Result<T, JsonError>;
-
 
 pub fn parse_json(input: &str) -> Result<JsonValue> {
     let input = input.trim();
@@ -13,39 +11,32 @@ pub fn parse_json(input: &str) -> Result<JsonValue> {
 
     if let Some(token) = token {
         match token {
-            Token::Boolean(value) => {
-                Ok(JsonValue::Boolean(*value))
-            }
-            Token::String(value)=> {
+            Token::Boolean(value) => Ok(JsonValue::Boolean(*value)),
+            Token::String(value) => {
                 if value.is_empty() {
-                    Err(JsonError::UnexpectedEndOfInput { 
-                        expected: "JSON value".to_string(), 
-                        position: 0
+                    Err(JsonError::UnexpectedEndOfInput {
+                        expected: "JSON value".to_string(),
+                        position: 0,
                     })
                 } else {
                     let cloned_val = value.clone();
                     Ok(JsonValue::String(cloned_val))
                 }
             }
-            Token::Number(value) => {
-                Ok(JsonValue::Number(*value))
-            }
-            Token::Null => {
-                Ok(JsonValue::Null)
-            }
-            _ => Err(JsonError::UnexpectedEndOfInput { 
-                expected: "JSON value".to_string(), 
-                position: 0 
-            })
+            Token::Number(value) => Ok(JsonValue::Number(*value)),
+            Token::Null => Ok(JsonValue::Null),
+            _ => Err(JsonError::UnexpectedEndOfInput {
+                expected: "JSON value".to_string(),
+                position: 0,
+            }),
         }
     } else {
-        Err(JsonError::UnexpectedEndOfInput { 
+        Err(JsonError::UnexpectedEndOfInput {
             expected: "JSON value".to_string(),
-            position: 0 
+            position: 0,
         })
     }
-}   
-
+}
 
 #[cfg(test)]
 mod test {
@@ -132,7 +123,7 @@ mod test {
         let result = parse_json("@invalid@");
 
         match result {
-            Err(JsonError::UnexpectedToken { .. }) => {}, // Expected
+            Err(JsonError::UnexpectedToken { .. }) => {} // Expected
             _ => panic!("Expected UnexpectedToken error"),
         }
     }
@@ -140,7 +131,10 @@ mod test {
     fn test_leading_decimal_not_a_number() {
         // .5 is invalid JSON - numbers must have leading digit (0.5 is valid)
         let err = tokenize(".5").unwrap_err();
-        assert!(matches!(err, JsonError::UnexpectedToken { position: 0, .. }));
+        assert!(matches!(
+            err,
+            JsonError::UnexpectedToken { position: 0, .. }
+        ));
     }
 
     #[test]
