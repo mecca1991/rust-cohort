@@ -286,4 +286,49 @@ mod tests {
         assert!(tokens.is_err());
         Ok(())
     }
+
+    #[test]
+    fn test_keyword_does_not_swallow_following_tokens() -> Result<()> {
+        let tokens = tokenize("[true, null]")?;
+        assert_eq!(
+            tokens,
+            vec![
+                Token::LeftBracket,
+                Token::Boolean(true),
+                Token::Comma,
+                Token::Null,
+                Token::RightBracket,
+            ]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_invalid_keyword_is_error() {
+        for input in ["nul", "tru", "fals", "txyz"] {
+            assert!(
+                matches!(tokenize(input), Err(JsonError::UnexpectedToken { .. })),
+                "Should fail for: {}",
+                input
+            );
+        }
+    }
+
+    #[test]
+    fn test_malformed_number_is_error_not_panic() {
+        for input in ["-", "1-2", "1.2.3", "--5"] {
+            assert!(
+                matches!(tokenize(input), Err(JsonError::InvalidNumber { .. })),
+                "Should fail for: {}",
+                input
+            );
+        }
+    }
+
+    #[test]
+    fn test_non_ascii_digit_is_error_not_panic() {
+        for input in ["½", "٣"] {
+            assert!(tokenize(input).is_err(), "Should fail for: {}", input);
+        }
+    }
 }

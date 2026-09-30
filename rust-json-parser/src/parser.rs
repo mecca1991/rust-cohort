@@ -52,6 +52,13 @@ mod test {
     }
 
     #[test]
+    fn test_parse_empty_string() -> Result<()> {
+        let result = parse_json(r#""""#)?;
+        assert_eq!(result, JsonValue::String(String::new()));
+        Ok(())
+    }
+
+    #[test]
     fn test_parse_number() -> Result<()> {
         let result = parse_json("42.5")?;
         assert_eq!(result, JsonValue::Number(42.5));
