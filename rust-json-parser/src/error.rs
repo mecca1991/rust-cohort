@@ -97,8 +97,8 @@ mod tests {
         };
 
         // All variants should be Debug-printable
-        format!("{:?}", token_error);
-        format!("{:?}", eof_error);
-        format!("{:?}", num_error);
+        assert!(!format!("{:?}", token_error).is_empty());
+        assert!(!format!("{:?}", eof_error).is_empty());
+        assert!(!format!("{:?}", num_error).is_empty());
     }
 }

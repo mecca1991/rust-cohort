@@ -17,53 +17,44 @@ pub enum Token {
 pub fn tokenize(input: &str) -> Result<Vec<Token>, JsonError> {
     let mut tokens: Vec<Token> = Vec::new();
     let mut chars = input.chars().peekable();
-    let mut token_position = 0;
     while let Some(&ch) = chars.peek() {
         match ch {
             '{' => {
                 tokens.push(Token::LeftBrace);
                 chars.next();
-                token_position += 1;
             }
             '}' => {
                 tokens.push(Token::RightBrace);
                 chars.next();
-                token_position += 1;
             }
             '[' => {
                 tokens.push(Token::LeftBracket);
                 chars.next();
-                token_position += 1;
             }
             ']' => {
                 tokens.push(Token::RightBracket);
                 chars.next();
-                token_position += 1;
             }
             ':' => {
                 tokens.push(Token::Colon);
                 chars.next();
-                token_position += 1;
             }
             ',' => {
                 tokens.push(Token::Comma);
                 chars.next();
-                token_position += 1;
             }
             '"' => {
-                let mut str_quotes = String::new();
-                str_quotes.push(ch);
+                let mut closed = false;
                 chars.next();
                 let mut collected = String::new();
                 for nchar in chars.by_ref() {
                     if nchar == '"' {
-                        str_quotes.push(ch);
+                        closed = true;
                         break;
                     }
                     collected.push(nchar);
-                    token_position += 1;
                 }
-                if str_quotes.len() < 2 {
+                if !closed {
                     return Err(JsonError::UnexpectedEndOfInput {
                         expected: "JSON value".to_string(),
                         position: 0,
@@ -74,12 +65,12 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, JsonError> {
             ch if ch.is_numeric() || (ch == '-') || (ch == '.') => {
                 let mut num_string: String = String::new();
                 while let Some(value) = chars.peek() {
-                    if (value.is_numeric() || ['-', '.'].contains(value))
-                        && !num_string.starts_with(".")
+                    if value.is_numeric()
+                        || value.to_string().starts_with("-")
+                        || value.to_string().contains(".")
                     {
                         num_string.push(*value);
                         chars.next();
-                        token_position += 1;
                     } else {
                         break;
                     }
@@ -92,41 +83,58 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, JsonError> {
                     }
                 }
                 if !num_string.is_empty() {
-                    tokens.push(Token::Number(
-                        num_string.parse::<f64>().expect("Invalid Number!"),
-                    ));
+                    let num = num_string.parse();
+                    match num {
+                        Ok(num) => tokens.push(Token::Number(num)),
+                        Err(error) => {
+                            return Err(JsonError::InvalidNumber {
+                                value: format!("{error:?}"),
+                                position: 0,
+                            });
+                        }
+                    }
                 }
             }
             ch if ch == 't' || ch == 'f' || ch == 'n' => {
                 let mut match_str = String::new();
-                let boolean_values = ["true".to_string(), "false".to_string()];
                 while let Some(nchar) = chars.peek() {
-                    if nchar.is_alphabetic() && !boolean_values.contains(&match_str) {
-                        match_str.push(*nchar);
+                    match nchar {
+                        nchar if nchar.is_alphabetic() => {
+                            match_str.push(*nchar);
+                        }
+                        _ => {
+                            break;
+                        }
                     }
+
                     if &match_str == "null" {
                         tokens.push(Token::Null);
                         match_str.clear();
-                    }
-                    if boolean_values.contains(&match_str) {
-                        tokens.push(Token::Boolean(
-                            match_str.parse().expect("Invalid Boolean value"),
-                        ));
+                    } else if &match_str == "true" || &match_str == "false" {
+                        let matched = match_str.parse();
+                        match matched {
+                            Ok(item) => tokens.push(Token::Boolean(item)),
+                            Err(_error) => {
+                                return Err(JsonError::UnexpectedToken {
+                                    expected: "true or false boolean value".to_string(),
+                                    found: match_str.to_string(),
+                                    position: 0,
+                                });
+                            }
+                        }
                         match_str.clear();
                     }
                     chars.next();
-                    token_position += 1;
                 }
             }
-            ' ' => {
+            ' ' | '\n' | '\r' | '\t' => {
                 chars.next();
-                token_position += 1;
             }
             _ => {
                 return Err(JsonError::UnexpectedToken {
                     expected: "valid JSON token".to_string(),
                     found: ch.to_string(),
-                    position: token_position,
+                    position: 0,
                 });
             }
         }
@@ -286,7 +294,15 @@ mod tests {
         assert!(tokens.is_err());
         Ok(())
     }
-
+    #[test]
+    fn test_leading_decimal_not_a_number() {
+        // .5 is invalid JSON - numbers must have leading digit (0.5 is valid)
+        let err = tokenize(".5").unwrap_err();
+        assert!(matches!(
+            err,
+            JsonError::UnexpectedToken { position: 0, .. }
+        ));
+    }
     #[test]
     fn test_keyword_does_not_swallow_following_tokens() -> Result<()> {
         let tokens = tokenize("[true, null]")?;
