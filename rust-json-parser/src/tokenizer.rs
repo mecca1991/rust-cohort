@@ -104,26 +104,24 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, JsonError> {
                     match_str.push(*nchar);
                     chars.next();
                 }
-                let no_space_string: String =
-                    match_str.chars().filter(|c| !c.is_whitespace()).collect();
-                if &no_space_string == "null" {
+                if &match_str == "null" {
                     tokens.push(Token::Null);
-                } else if &no_space_string == "true" || &no_space_string == "false" {
-                    let matched = no_space_string.parse();
+                } else if &match_str == "true" || &match_str == "false" {
+                    let matched = match_str.parse();
                     match matched {
                         Ok(item) => tokens.push(Token::Boolean(item)),
                         Err(_error) => {
                             return Err(JsonError::UnexpectedToken {
                                 expected: "true or false boolean value".to_string(),
-                                found: no_space_string.to_string(),
+                                found: match_str.to_string(),
                                 position: 0,
                             });
                         }
                     }
                 } else {
                     return Err(JsonError::UnexpectedToken {
-                        expected: "Boolean value".to_string(),
-                        found: no_space_string.to_string(),
+                        expected: "Boolean value or Null value".to_string(),
+                        found: match_str.to_string(),
                         position: 0,
                     });
                 }
