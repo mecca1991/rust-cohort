@@ -98,33 +98,34 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, JsonError> {
             ch if ch == 't' || ch == 'f' || ch == 'n' => {
                 let mut match_str = String::new();
                 while let Some(nchar) = chars.peek() {
-                    match nchar {
-                        nchar if nchar.is_alphabetic() => {
-                            match_str.push(*nchar);
-                        }
-                        _ => {
-                            break;
-                        }
+                    if !nchar.is_alphanumeric() {
+                        break;
                     }
-
-                    if &match_str == "null" {
-                        tokens.push(Token::Null);
-                        match_str.clear();
-                    } else if &match_str == "true" || &match_str == "false" {
-                        let matched = match_str.parse();
-                        match matched {
-                            Ok(item) => tokens.push(Token::Boolean(item)),
-                            Err(_error) => {
-                                return Err(JsonError::UnexpectedToken {
-                                    expected: "true or false boolean value".to_string(),
-                                    found: match_str.to_string(),
-                                    position: 0,
-                                });
-                            }
-                        }
-                        match_str.clear();
-                    }
+                    match_str.push(*nchar);
                     chars.next();
+                }
+                let no_space_string: String =
+                    match_str.chars().filter(|c| !c.is_whitespace()).collect();
+                if &no_space_string == "null" {
+                    tokens.push(Token::Null);
+                } else if &no_space_string == "true" || &no_space_string == "false" {
+                    let matched = no_space_string.parse();
+                    match matched {
+                        Ok(item) => tokens.push(Token::Boolean(item)),
+                        Err(_error) => {
+                            return Err(JsonError::UnexpectedToken {
+                                expected: "true or false boolean value".to_string(),
+                                found: no_space_string.to_string(),
+                                position: 0,
+                            });
+                        }
+                    }
+                } else {
+                    return Err(JsonError::UnexpectedToken {
+                        expected: "Boolean value".to_string(),
+                        found: no_space_string.to_string(),
+                        position: 0,
+                    });
                 }
             }
             ' ' | '\n' | '\r' | '\t' => {
@@ -321,7 +322,7 @@ mod tests {
 
     #[test]
     fn test_invalid_keyword_is_error() {
-        for input in ["nul", "tru", "fals", "txyz"] {
+        for input in ["nul", "tru", "fals", "txyz", "true123", "false.452"] {
             assert!(
                 matches!(tokenize(input), Err(JsonError::UnexpectedToken { .. })),
                 "Should fail for: {}",
