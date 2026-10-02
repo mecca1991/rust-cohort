@@ -1,10 +1,15 @@
-use rust_json_parser::tokenizer::tokenize;
+use rust_json_parser::parse_json;
 
 fn main() {
-    let input = r#"{"age": 30, "children_names": ["Naia", "Bryan"]}"#;
+    let input = r#""The quick brown fox jumps over the lazy dog""#;
 
-    let tokens = tokenize(input);
-    println!("Input JSON: {input}");
-    println!("\nTokens:");
-    println!("{:?}", tokens);
+    let result = parse_json(input);
+    match result {
+        Ok(result) => {
+            println!("The result is: \n{:?}", result)
+        }
+        Err(result) => {
+            println!("An error occured! \n{:?}", result)
+        }
+    }
 }
