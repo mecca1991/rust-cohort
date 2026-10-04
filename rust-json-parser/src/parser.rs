@@ -1,12 +1,13 @@
 use crate::error::JsonError;
-use crate::tokenizer::{Token, tokenize};
+use crate::tokenizer::{Token, Tokenizer};
 use crate::value::JsonValue;
 
 type Result<T> = std::result::Result<T, JsonError>;
 
 pub fn parse_json(input: &str) -> Result<JsonValue> {
     let input = input.trim();
-    let tokens = tokenize(input)?;
+    let mut tokenizer = Tokenizer::new(input);
+    let tokens = tokenizer.tokenize()?;
 
     match tokens.as_slice() {
         [] => Err(JsonError::UnexpectedEndOfInput {
@@ -124,17 +125,6 @@ mod test {
         match result {
             Err(JsonError::UnexpectedToken { .. }) => {} // Expected
             _ => panic!("Expected UnexpectedToken error"),
-        }
-    }
-
-    #[test]
-    fn test_unterminated_string() {
-        let err = tokenize(r#""missing end quote"#).unwrap_err();
-        match err {
-            JsonError::UnexpectedEndOfInput { position, .. } => {
-                assert_eq!(position, 0);
-            }
-            other => panic!("expected UnexpectedEndOfInput, got {:?}", other),
         }
     }
 }

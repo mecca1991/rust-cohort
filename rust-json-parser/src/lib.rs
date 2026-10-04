@@ -12,7 +12,7 @@ mod value;
 // With this: users write `use my_lib::parse_json` (cleaner!)
 pub use error::JsonError;
 pub use parser::parse_json;
-pub use tokenizer::{Token, tokenize};
+pub use tokenizer::{Token};
 pub use value::JsonValue;
 
 // Type alias for convenience

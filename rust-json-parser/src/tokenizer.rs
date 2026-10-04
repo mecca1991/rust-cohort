@@ -14,131 +14,158 @@ pub enum Token {
     Null,
 }
 
-pub fn tokenize(input: &str) -> Result<Vec<Token>, JsonError> {
-    let mut tokens: Vec<Token> = Vec::new();
-    let mut chars = input.chars().peekable();
-    while let Some(&ch) = chars.peek() {
-        match ch {
-            '{' => {
-                tokens.push(Token::LeftBrace);
-                chars.next();
-            }
-            '}' => {
-                tokens.push(Token::RightBrace);
-                chars.next();
-            }
-            '[' => {
-                tokens.push(Token::LeftBracket);
-                chars.next();
-            }
-            ']' => {
-                tokens.push(Token::RightBracket);
-                chars.next();
-            }
-            ':' => {
-                tokens.push(Token::Colon);
-                chars.next();
-            }
-            ',' => {
-                tokens.push(Token::Comma);
-                chars.next();
-            }
-            '"' => {
-                let mut closed = false;
-                chars.next();
-                let mut collected = String::new();
-                for nchar in chars.by_ref() {
-                    if nchar == '"' {
-                        closed = true;
-                        break;
-                    }
-                    collected.push(nchar);
+#[derive(Debug, Clone, PartialEq)]
+pub struct Tokenizer {
+    input: Vec<char>,
+    position: usize
+}
+
+impl Tokenizer {
+    pub fn new(input: &str) -> Self {
+        let characters = input.chars().collect();
+        Self { input: characters, position: 0 }
+    }
+
+    pub fn tokenize(&mut self) -> Result<Vec<Token>, JsonError> {
+        let mut chars = self.input.clone().into_iter().peekable();
+        let mut tokens: Vec<Token> = Vec::new();
+
+        while let Some(&ch) = chars.peek() {
+            match ch {
+                '{' => {
+                    tokens.push(Token::LeftBrace);
+                    chars.next();
                 }
-                if !closed {
-                    return Err(JsonError::UnexpectedEndOfInput {
-                        expected: "JSON value".to_string(),
-                        position: 0,
-                    });
+                '}' => {
+                    tokens.push(Token::RightBrace);
+                    chars.next();
                 }
-                tokens.push(Token::String(collected));
-            }
-            ch if ch.is_numeric() || (ch == '-') || (ch == '.') => {
-                let mut num_string: String = String::new();
-                while let Some(value) = chars.peek() {
-                    if value.is_numeric()
-                        || value.to_string().starts_with("-")
-                        || value.to_string().contains(".")
-                    {
-                        num_string.push(*value);
-                        chars.next();
-                    } else {
-                        break;
+                '[' => {
+                    tokens.push(Token::LeftBracket);
+                    chars.next();
+                }
+                ']' => {
+                    tokens.push(Token::RightBracket);
+                    chars.next();
+                }
+                ':' => {
+                    tokens.push(Token::Colon);
+                    chars.next();
+                }
+                ',' => {
+                    tokens.push(Token::Comma);
+                    chars.next();
+                }
+                '"' => {
+                    let mut closed = false;
+                    chars.next();
+                    let mut collected = String::new();
+                    for nchar in chars.by_ref() {
+                        if nchar == '"' {
+                            closed = true;
+                            break;
+                        }
+                        collected.push(nchar);
                     }
-                    if num_string.starts_with(".") {
-                        return Err(JsonError::UnexpectedToken {
+                    if !closed {
+                        return Err(JsonError::UnexpectedEndOfInput {
+                            expected: "JSON value".to_string(),
                             position: 0,
-                            expected: "JSON Value".to_string(),
-                            found: ".".to_string(),
+                        });
+                    }
+                    tokens.push(Token::String(collected));
+                }
+                ch if ch.is_numeric() || (ch == '-') || (ch == '.') => {
+                    let mut num_string: String = String::new();
+                    while let Some(value) = chars.peek() {
+                        if value.is_numeric()
+                            || value.to_string().starts_with("-")
+                            || value.to_string().contains(".")
+                        {
+                            num_string.push(*value);
+                            chars.next();
+                        } else {
+                            break;
+                        }
+                        if num_string.starts_with(".") {
+                            return Err(JsonError::UnexpectedToken {
+                                position: 0,
+                                expected: "JSON Value".to_string(),
+                                found: ".".to_string(),
+                            });
+                        }
+                    }
+                    if !num_string.is_empty() {
+                        let num = num_string.parse();
+                        match num {
+                            Ok(num) => tokens.push(Token::Number(num)),
+                            Err(error) => {
+                                return Err(JsonError::InvalidNumber {
+                                    value: format!("{error:?}"),
+                                    position: 0,
+                                });
+                            }
+                        }
+                    }
+                }
+                ch if ch == 't' || ch == 'f' || ch == 'n' => {
+                    let mut match_str = String::new();
+                    while let Some(nchar) = chars.peek() {
+                        if !nchar.is_alphanumeric() {
+                            break;
+                        }
+                        match_str.push(*nchar);
+                        chars.next();
+                    }
+                    if &match_str == "null" {
+                        tokens.push(Token::Null);
+                    } else if &match_str == "true" || &match_str == "false" {
+                        let matched = match_str.parse();
+                        match matched {
+                            Ok(item) => tokens.push(Token::Boolean(item)),
+                            Err(_error) => {
+                                return Err(JsonError::UnexpectedToken {
+                                    expected: "true or false boolean value".to_string(),
+                                    found: match_str.to_string(),
+                                    position: 0,
+                                });
+                            }
+                        }
+                    } else {
+                        return Err(JsonError::UnexpectedToken {
+                            expected: "Boolean value or Null value".to_string(),
+                            found: match_str.to_string(),
+                            position: 0,
                         });
                     }
                 }
-                if !num_string.is_empty() {
-                    let num = num_string.parse();
-                    match num {
-                        Ok(num) => tokens.push(Token::Number(num)),
-                        Err(error) => {
-                            return Err(JsonError::InvalidNumber {
-                                value: format!("{error:?}"),
-                                position: 0,
-                            });
-                        }
-                    }
-                }
-            }
-            ch if ch == 't' || ch == 'f' || ch == 'n' => {
-                let mut match_str = String::new();
-                while let Some(nchar) = chars.peek() {
-                    if !nchar.is_alphanumeric() {
-                        break;
-                    }
-                    match_str.push(*nchar);
+                ' ' | '\n' | '\r' | '\t' => {
                     chars.next();
                 }
-                if &match_str == "null" {
-                    tokens.push(Token::Null);
-                } else if &match_str == "true" || &match_str == "false" {
-                    let matched = match_str.parse();
-                    match matched {
-                        Ok(item) => tokens.push(Token::Boolean(item)),
-                        Err(_error) => {
-                            return Err(JsonError::UnexpectedToken {
-                                expected: "true or false boolean value".to_string(),
-                                found: match_str.to_string(),
-                                position: 0,
-                            });
-                        }
-                    }
-                } else {
+                _ => {
                     return Err(JsonError::UnexpectedToken {
-                        expected: "Boolean value or Null value".to_string(),
-                        found: match_str.to_string(),
+                        expected: "valid JSON token".to_string(),
+                        found: ch.to_string(),
                         position: 0,
                     });
                 }
             }
-            ' ' | '\n' | '\r' | '\t' => {
-                chars.next();
-            }
-            _ => {
-                return Err(JsonError::UnexpectedToken {
-                    expected: "valid JSON token".to_string(),
-                    found: ch.to_string(),
-                    position: 0,
-                });
-            }
         }
+        Ok(tokens)
+
     }
-    Ok(tokens)
+
+    // fn advance(&mut self) -> Option<char> {
+
+    // }
+
+    // fn peek(&self) -> Option<char> {
+
+    // }
+
+    // fn is_at_end(&self) -> bool {
+        
+    // }
 }
 
 #[cfg(test)]
@@ -153,7 +180,8 @@ mod tests {
 
     #[test]
     fn test_empty_braes() -> Result<()> {
-        let tokens = tokenize("{}")?;
+        let mut tokenizer = Tokenizer::new("{}");
+        let tokens = tokenizer.tokenize()?;
         assert_eq!(tokens.len(), 2);
         assert_eq!(tokens[0], Token::LeftBrace);
         assert_eq!(tokens[1], Token::RightBrace);
@@ -161,23 +189,25 @@ mod tests {
     }
     #[test]
     fn test_simple_string() -> Result<()> {
-        let tokens = tokenize(r#""hello""#)?;
+        let mut tokenizer = Tokenizer::new(r#""hello""#);
+        let tokens = tokenizer.tokenize()?;
         assert_eq!(tokens.len(), 1);
         assert_eq!(tokens[0], Token::String("hello".to_string()));
         Ok(())
     }
     #[test]
     fn test_tokenize_string() -> Result<()> {
-        let tokens = tokenize(r#""hello world""#)?;
-
+        let mut tokenizer = Tokenizer::new(r#""hello world""#);
+        let tokens = tokenizer.tokenize()?;
         assert_eq!(tokens.len(), 1);
         assert_eq!(tokens[0], Token::String("hello world".to_string()));
         Ok(())
     }
     #[test]
     fn test_empty_string() -> Result<()> {
-        let tokens = tokenize(r#""""#)?;
+        let mut tokenizer = Tokenizer::new(r#""""#);
 
+        let tokens = tokenizer.tokenize()?;
         assert_eq!(tokens.len(), 1);
         assert_eq!(tokens[0], Token::String("".to_string()));
         Ok(())
@@ -185,7 +215,8 @@ mod tests {
 
     #[test]
     fn test_string_containing_json_special_chars() -> Result<()> {
-        let tokens = tokenize(r#""{key: value}""#)?;
+        let mut tokenizer = Tokenizer::new(r#""{key: value}""#);
+        let tokens = tokenizer.tokenize()?;
 
         assert_eq!(tokens.len(), 1);
         assert_eq!(tokens[0], Token::String("{key: value}".to_string()));
@@ -194,7 +225,8 @@ mod tests {
 
     #[test]
     fn test_string_with_keyword_like_content() -> Result<()> {
-        let tokens = tokenize(r#""not true or false""#)?;
+        let mut tokenizer = Tokenizer::new(r#""not true or false""#);
+        let tokens = tokenizer.tokenize()?;
 
         assert_eq!(tokens.len(), 1);
         assert_eq!(tokens[0], Token::String("not true or false".to_string()));
@@ -203,7 +235,8 @@ mod tests {
 
     #[test]
     fn test_string_with_number_like_content() -> Result<()> {
-        let tokens = tokenize(r#""phone: 555-1234""#)?;
+        let mut tokenizer = Tokenizer::new(r#""phone: 555-1234""#);
+        let tokens = tokenizer.tokenize()?;
         assert_eq!(tokens.len(), 1);
         assert_eq!(tokens[0], Token::String("phone: 555-1234".to_string()));
         Ok(())
@@ -211,8 +244,9 @@ mod tests {
 
     #[test]
     fn test_number() -> Result<()> {
-        let tokens = tokenize("42")?;
+        let mut tokenizer = Tokenizer::new("42");
 
+        let tokens = tokenizer.tokenize()?;
         assert_eq!(tokens.len(), 1);
         assert_eq!(tokens[0], Token::Number(42.0));
         Ok(())
@@ -220,7 +254,8 @@ mod tests {
 
     #[test]
     fn test_negative_number() -> Result<()> {
-        let tokens = tokenize("-42")?;
+        let mut tokenizer = Tokenizer::new("-42");
+        let tokens = tokenizer.tokenize()?;
         assert_eq!(tokens.len(), 1);
         assert_eq!(tokens[0], Token::Number(-42.0));
         Ok(())
@@ -228,8 +263,8 @@ mod tests {
 
     #[test]
     fn test_decimal_number() -> Result<()> {
-        let tokens = tokenize("0.5")?;
-
+        let mut tokenizer = Tokenizer::new("0.5");
+        let tokens = tokenizer.tokenize()?;
         assert_eq!(tokens.len(), 1);
         assert_eq!(tokens[0], Token::Number(0.5));
         Ok(())
@@ -237,7 +272,8 @@ mod tests {
 
     #[test]
     fn test_leading_decimal_number() -> Result<()> {
-        let res = tokenize(".5");
+        let mut tokenizer = Tokenizer::new(".5");
+        let res = tokenizer.tokenize();
         assert!(res.is_err());
 
         Ok(())
@@ -245,7 +281,8 @@ mod tests {
 
     #[test]
     fn test_boolean_and_null() -> Result<()> {
-        let tokens = tokenize("true false null")?;
+        let mut tokenizer = Tokenizer::new("true false null");
+        let tokens = tokenizer.tokenize()?;
         assert_eq!(tokens.len(), 3);
         assert_eq!(tokens[0], Token::Boolean(true));
         assert_eq!(tokens[1], Token::Boolean(false));
@@ -255,7 +292,8 @@ mod tests {
 
     #[test]
     fn test_simple_object() -> Result<()> {
-        let tokens = tokenize(r#"{"name": "Alice"}"#)?;
+        let mut tokenizer = Tokenizer::new(r#"{"name": "Alice"}"#);
+        let tokens = tokenizer.tokenize()?;
 
         assert_eq!(tokens.len(), 5);
         assert_eq!(tokens[0], Token::LeftBrace);
@@ -268,8 +306,8 @@ mod tests {
 
     #[test]
     fn test_multiple_values() -> Result<()> {
-        let tokens = tokenize(r#"{"age": 30, "active": true}"#)?;
-
+        let mut tokenizer = Tokenizer::new(r#"{"age": 30, "active": true}"#);
+        let tokens = tokenizer.tokenize()?;
         assert!(tokens.contains(&Token::String("age".to_string())));
         assert!(tokens.contains(&Token::Number(30.0)));
         assert!(tokens.contains(&Token::Comma));
@@ -280,8 +318,8 @@ mod tests {
 
     #[test]
     fn test_json_with_brackets() -> Result<()> {
-        let tokens = tokenize(r#"{"age": 30, "children_names": ["Naia", "Bryan"]}"#)?;
-
+        let mut tokenizer = Tokenizer::new(r#"{"age": 30, "children_names": ["Naia", "Bryan"]}"#);
+        let tokens = tokenizer.tokenize()?;
         assert_eq!(tokens.len(), 13);
         assert_eq!(tokens[7], Token::LeftBracket);
         assert_eq!(tokens[11], Token::RightBracket);
@@ -289,14 +327,16 @@ mod tests {
     }
     #[test]
     fn test_unterminated_string_does_not_panic() -> Result<()> {
-        let tokens = tokenize(r#""hello"#);
+        let mut tokenizer = Tokenizer::new(r#""hello"#);
+        let tokens = tokenizer.tokenize();
         assert!(tokens.is_err());
         Ok(())
     }
     #[test]
     fn test_leading_decimal_not_a_number() {
         // .5 is invalid JSON - numbers must have leading digit (0.5 is valid)
-        let err = tokenize(".5").unwrap_err();
+        let mut tokenizer = Tokenizer::new(".5");
+        let err = tokenizer.tokenize().unwrap_err();
         assert!(matches!(
             err,
             JsonError::UnexpectedToken { position: 0, .. }
@@ -304,7 +344,8 @@ mod tests {
     }
     #[test]
     fn test_keyword_does_not_swallow_following_tokens() -> Result<()> {
-        let tokens = tokenize("[true, null]")?;
+        let mut tokenizer = Tokenizer::new("[true, null]");
+        let tokens = tokenizer.tokenize()?;
         assert_eq!(
             tokens,
             vec![
@@ -321,8 +362,10 @@ mod tests {
     #[test]
     fn test_invalid_keyword_is_error() {
         for input in ["nul", "tru", "fals", "txyz", "true123", "false.452"] {
+            let mut tokenizer = Tokenizer::new(input);
+
             assert!(
-                matches!(tokenize(input), Err(JsonError::UnexpectedToken { .. })),
+                matches!(tokenizer.tokenize(), Err(JsonError::UnexpectedToken { .. })),
                 "Should fail for: {}",
                 input
             );
@@ -332,18 +375,65 @@ mod tests {
     #[test]
     fn test_malformed_number_is_error_not_panic() {
         for input in ["-", "1-2", "1.2.3", "--5"] {
+            let mut tokenizer = Tokenizer::new(input);
             assert!(
-                matches!(tokenize(input), Err(JsonError::InvalidNumber { .. })),
+                matches!(tokenizer.tokenize(), Err(JsonError::InvalidNumber { .. })),
                 "Should fail for: {}",
                 input
             );
         }
     }
+    #[test]
+    fn test_unterminated_string() {
+        let mut tokenizer = Tokenizer::new(r#""missing end quote"#);
 
+        let err = tokenizer.tokenize().unwrap_err();
+        match err {
+            JsonError::UnexpectedEndOfInput { position, .. } => {
+                assert_eq!(position, 0);
+            }
+            other => panic!("expected UnexpectedEndOfInput, got {:?}", other),
+        }
+    }
     #[test]
     fn test_non_ascii_digit_is_error_not_panic() {
         for input in ["½", "٣"] {
-            assert!(tokenize(input).is_err(), "Should fail for: {}", input);
+            let mut tokenizer = Tokenizer::new(input);
+            assert!(tokenizer.tokenize().is_err(), "Should fail for: {}", input);
         }
+    }
+    #[test]
+    fn test_tokenizer_struct_creation() {
+        let _tokenizer = Tokenizer::new(r#""hello""#);
+        // Tokenizer should be created without error
+        // Internal state is private, so we test via tokenize()
+    }
+    #[test]
+    fn test_tokenize_number() -> Result<()> {
+        let mut tokenizer = Tokenizer::new("42");
+        let tokens = tokenizer.tokenize()?;
+        assert_eq!(tokens, vec![Token::Number(42.0)]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_tokenize_literals() -> Result<()> {
+        let mut t1 = Tokenizer::new("true");
+        assert_eq!(t1.tokenize()?, vec![Token::Boolean(true)]);
+
+        let mut t2 = Tokenizer::new("false");
+        assert_eq!(t2.tokenize()?, vec![Token::Boolean(false)]);
+
+        let mut t3 = Tokenizer::new("null");
+        assert_eq!(t3.tokenize()?, vec![Token::Null]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_tokenize_simple_string() -> Result<()> {
+        let mut tokenizer = Tokenizer::new(r#""hello""#);
+        let tokens = tokenizer.tokenize()?;
+        assert_eq!(tokens, vec![Token::String("hello".to_string())]);
+        Ok(())
     }
 }
