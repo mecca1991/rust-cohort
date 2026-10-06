@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::error::JsonError;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -17,50 +19,59 @@ pub enum Token {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Tokenizer {
     input: Vec<char>,
-    position: usize
+    position: usize,
 }
 
 impl Tokenizer {
     pub fn new(input: &str) -> Self {
         let characters = input.chars().collect();
-        Self { input: characters, position: 0 }
+        println!("These are the chars {:?}", characters);
+        Self {
+            input: characters,
+            position: 0,
+        }
     }
 
     pub fn tokenize(&mut self) -> Result<Vec<Token>, JsonError> {
-        let mut chars = self.input.clone().into_iter().peekable();
         let mut tokens: Vec<Token> = Vec::new();
-
-        while let Some(&ch) = chars.peek() {
+        while let Some(ch) = self.peek() {
+            println!("This is matching now {}", &ch);
             match ch {
                 '{' => {
                     tokens.push(Token::LeftBrace);
-                    chars.next();
+                    self.advance();
                 }
                 '}' => {
                     tokens.push(Token::RightBrace);
-                    chars.next();
+                    self.advance();
                 }
                 '[' => {
                     tokens.push(Token::LeftBracket);
-                    chars.next();
+                    self.advance();
                 }
                 ']' => {
                     tokens.push(Token::RightBracket);
-                    chars.next();
+                    self.advance();
                 }
                 ':' => {
                     tokens.push(Token::Colon);
-                    chars.next();
+                    self.advance();
                 }
                 ',' => {
                     tokens.push(Token::Comma);
-                    chars.next();
+                    self.advance();
                 }
                 '"' => {
                     let mut closed = false;
-                    chars.next();
+                    self.advance();
                     let mut collected = String::new();
-                    for nchar in chars.by_ref() {
+                    while self.peek().is_some() {
+                        let nchar = self.input[self.position];
+                        if nchar == '\n' {
+                            self.advance();
+                            continue;
+                        } 
+                        self.advance();
                         if nchar == '"' {
                             closed = true;
                             break;
@@ -72,18 +83,22 @@ impl Tokenizer {
                             expected: "JSON value".to_string(),
                             position: 0,
                         });
+                    } else {
+                        println!("This is the final collection {}", &collected);
+                        tokens.push(Token::String(collected));
+                        println!("Tokens added {:?}", &tokens);
                     }
-                    tokens.push(Token::String(collected));
+                    
                 }
                 ch if ch.is_numeric() || (ch == '-') || (ch == '.') => {
                     let mut num_string: String = String::new();
-                    while let Some(value) = chars.peek() {
+                    while let Some(value) = self.peek() {
                         if value.is_numeric()
                             || value.to_string().starts_with("-")
                             || value.to_string().contains(".")
                         {
-                            num_string.push(*value);
-                            chars.next();
+                            num_string.push(value);
+                            self.advance();
                         } else {
                             break;
                         }
@@ -102,7 +117,7 @@ impl Tokenizer {
                             Err(error) => {
                                 return Err(JsonError::InvalidNumber {
                                     value: format!("{error:?}"),
-                                    position: 0,
+                                    position: self.position,
                                 });
                             }
                         }
@@ -110,12 +125,12 @@ impl Tokenizer {
                 }
                 ch if ch == 't' || ch == 'f' || ch == 'n' => {
                     let mut match_str = String::new();
-                    while let Some(nchar) = chars.peek() {
+                    while let Some(nchar) = self.peek() {
                         if !nchar.is_alphanumeric() {
                             break;
                         }
-                        match_str.push(*nchar);
-                        chars.next();
+                        match_str.push(nchar);
+                        self.advance();
                     }
                     if &match_str == "null" {
                         tokens.push(Token::Null);
@@ -127,7 +142,7 @@ impl Tokenizer {
                                 return Err(JsonError::UnexpectedToken {
                                     expected: "true or false boolean value".to_string(),
                                     found: match_str.to_string(),
-                                    position: 0,
+                                    position: self.position,
                                 });
                             }
                         }
@@ -135,37 +150,42 @@ impl Tokenizer {
                         return Err(JsonError::UnexpectedToken {
                             expected: "Boolean value or Null value".to_string(),
                             found: match_str.to_string(),
-                            position: 0,
+                            position: self.position,
                         });
                     }
                 }
                 ' ' | '\n' | '\r' | '\t' => {
-                    chars.next();
+                    self.advance();
                 }
                 _ => {
                     return Err(JsonError::UnexpectedToken {
                         expected: "valid JSON token".to_string(),
                         found: ch.to_string(),
-                        position: 0,
+                        position: self.position,
                     });
                 }
             }
         }
         Ok(tokens)
-
     }
 
-    // fn advance(&mut self) -> Option<char> {
+    fn advance(&mut self) -> Option<char> {
+       let next_token = self.input.get(self.position).copied();
+       self.position += 1;
+       next_token
+    }
 
-    // }
+    fn peek(&self) -> Option<char> {
+        self.input.get(self.position).copied()
 
-    // fn peek(&self) -> Option<char> {
-
-    // }
-
-    // fn is_at_end(&self) -> bool {
-        
-    // }
+    }
+    fn is_at_end(&self) -> bool {
+        if let Some(_ch) = self.input.last() {
+            return true;
+        } else {
+            return false;
+        }
+    }
 }
 
 #[cfg(test)]
@@ -436,4 +456,80 @@ mod tests {
         assert_eq!(tokens, vec![Token::String("hello".to_string())]);
         Ok(())
     }
+    #[test]
+    fn test_tokenizer_multiple_tokens() -> Result<()> {
+        // Tests that a single tokenize() call handles multiple tokens
+        // Note: Unlike Python iterators, calling tokenize() again on the same
+        // instance would return empty - the input has been consumed.
+        // Create a new Tokenizer instance if you need to parse new input.
+        let mut tokenizer = Tokenizer::new("123 456");
+        let tokens = tokenizer.tokenize()?;
+        assert_eq!(tokens.len(), 2);
+        Ok(())
+    }
+
+    #[test]
+    fn test_tokenize_negative_number() -> Result<()> {
+        let mut tokenizer = Tokenizer::new("-3.14");
+        let tokens = tokenizer.tokenize()?;
+        assert_eq!(tokens, vec![Token::Number(-3.14)]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_invalid_keyword_error_position_points_to_start() -> Result<()> {
+        let input = "   xyz";
+        let mut tokenizer = Tokenizer::new(input);
+        let err = tokenizer.tokenize().unwrap_err();
+        match err {
+            JsonError::UnexpectedToken { position, .. } => {
+                assert_eq!(
+                    position, 3,
+                    "error position should point to the start of 'xyz' (index 3), not past it"
+                );
+            }
+            other => panic!("expected UnexpectedToken, got {:?}", other),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_escape_newline() -> Result<()> {
+        let mut tokenizer = Tokenizer::new(r#""hello\nworld""#);
+        let tokens = tokenizer.tokenize()?;
+        assert_eq!(tokens, vec![Token::String("hello\nworld".to_string())]);
+        Ok(())
+    }
+
+    // #[test]
+    // fn test_escape_tab() -> Result<()> {
+    //     let mut tokenizer = Tokenizer::new(r#""col1\tcol2""#);
+    //     let tokens = tokenizer.tokenize()?;
+    //     assert_eq!(tokens, vec![Token::String("col1\tcol2".to_string())]);
+    //     Ok(())
+    // }
+
+    // #[test]
+    // fn test_escape_quote() -> Result<()> {
+    //     let mut tokenizer = Tokenizer::new(r#""say \"hello\"""#);
+    //     let tokens = tokenizer.tokenize()?;
+    //     assert_eq!(tokens, vec![Token::String("say \"hello\"".to_string())]);
+    //     Ok(())
+    // }
+
+    // #[test]
+    // fn test_escape_backslash() -> Result<()> {
+    //     let mut tokenizer = Tokenizer::new(r#""path\\to\\file""#);
+    //     let tokens = tokenizer.tokenize()?;
+    //     assert_eq!(tokens, vec![Token::String("path\\to\\file".to_string())]);
+    //     Ok(())
+    // }
+
+    // #[test]
+    // fn test_multiple_escapes() -> Result<()> {
+    //     let mut tokenizer = Tokenizer::new(r#""a\nb\tc\"""#);
+    //     let tokens = tokenizer.tokenize()?;
+    //     assert_eq!(tokens, vec![Token::String("a\nb\tc\"".to_string())]);
+    //     Ok(())
+    // }
 }

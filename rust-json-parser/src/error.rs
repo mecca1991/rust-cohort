@@ -15,6 +15,14 @@ pub enum JsonError {
         value: String,
         position: usize,
     },
+    InvalidEscape {
+        char: char,
+        position: usize,
+    },
+    InvalidUnicode {
+        sequence: String,
+        position: usize,
+    },
 }
 
 // TODO: Implement Display trait
@@ -41,6 +49,12 @@ impl fmt::Display for JsonError {
             }
             JsonError::InvalidNumber { value, position } => {
                 write!(f, "Invalid Number {} at position {}", value, position)
+            },
+            JsonError::InvalidEscape { char, position } => {
+                write!(f, "Invalid Escape character {} at position {} ", char, position)
+            },
+            JsonError::InvalidUnicode { sequence, position } => {
+                write!(f, "Invalid Unicode {} at position {}", sequence, position)
             }
         }
     }
