@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::error::JsonError;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -35,7 +33,6 @@ impl Tokenizer {
     pub fn tokenize(&mut self) -> Result<Vec<Token>, JsonError> {
         let mut tokens: Vec<Token> = Vec::new();
         while let Some(ch) = self.peek() {
-            println!("This is matching now {}", &ch);
             match ch {
                 '{' => {
                     tokens.push(Token::LeftBrace);
@@ -67,10 +64,64 @@ impl Tokenizer {
                     let mut collected = String::new();
                     while self.peek().is_some() {
                         let nchar = self.input[self.position];
-                        if nchar == '\n' {
+                        if nchar == '\\' {
                             self.advance();
+                            if let Some(ch) = self.peek() {
+                                match ch {
+                                    'n' => {
+                                        collected.push('\n');
+                                        self.advance();
+                                    }
+                                    't' => {
+                                        collected.push('\t');
+                                        self.advance();
+                                    }
+                                    'b' => {
+                                        collected.push('\x08');
+                                        self.advance();
+                                    }
+                                    'f' => {
+                                        collected.push('\x0C');
+                                        self.advance();
+                                    }
+                                    'r' => {
+                                        collected.push('\r');
+                                        self.advance();
+                                    }
+                                    '"' => {
+                                        collected.push('\"');
+                                        self.advance();
+                                    }
+                                    '\\' => {
+                                        collected.push('\\');
+                                        self.advance();
+                                    }
+                                    '/' => {
+                                        collected.push(ch);
+                                        self.advance();
+                                    }
+                                    'u' => {
+                                        let mut hex_track = 0;
+                                        let mut hex_value = String::new();
+                                        while hex_track < 4 {
+                                            hex_value.push(ch);
+                                            self.advance();
+                                            hex_track += 1;
+                                        }
+                                        println!("HEX Value is {}", &hex_value);
+                                    }
+
+                                    _ => {
+                                        return Err(JsonError::InvalidEscape {
+                                            char: ch,
+                                            position: self.position,
+                                        });
+                                    }
+                                }
+                            }
                             continue;
-                        } 
+                        }
+                        println!("This {:?}", &nchar);
                         self.advance();
                         if nchar == '"' {
                             closed = true;
@@ -84,11 +135,8 @@ impl Tokenizer {
                             position: 0,
                         });
                     } else {
-                        println!("This is the final collection {}", &collected);
                         tokens.push(Token::String(collected));
-                        println!("Tokens added {:?}", &tokens);
                     }
-                    
                 }
                 ch if ch.is_numeric() || (ch == '-') || (ch == '.') => {
                     let mut num_string: String = String::new();
@@ -170,14 +218,13 @@ impl Tokenizer {
     }
 
     fn advance(&mut self) -> Option<char> {
-       let next_token = self.input.get(self.position).copied();
-       self.position += 1;
-       next_token
+        let next_token = self.input.get(self.position).copied();
+        self.position += 1;
+        next_token
     }
 
     fn peek(&self) -> Option<char> {
         self.input.get(self.position).copied()
-
     }
     fn is_at_end(&self) -> bool {
         if let Some(_ch) = self.input.last() {
@@ -501,35 +548,58 @@ mod tests {
         Ok(())
     }
 
-    // #[test]
-    // fn test_escape_tab() -> Result<()> {
-    //     let mut tokenizer = Tokenizer::new(r#""col1\tcol2""#);
-    //     let tokens = tokenizer.tokenize()?;
-    //     assert_eq!(tokens, vec![Token::String("col1\tcol2".to_string())]);
-    //     Ok(())
-    // }
+    #[test]
+    fn test_escape_tab() -> Result<()> {
+        let mut tokenizer = Tokenizer::new(r#""col1\tcol2""#);
+        let tokens = tokenizer.tokenize()?;
+        assert_eq!(tokens, vec![Token::String("col1\tcol2".to_string())]);
+        Ok(())
+    }
 
-    // #[test]
-    // fn test_escape_quote() -> Result<()> {
-    //     let mut tokenizer = Tokenizer::new(r#""say \"hello\"""#);
-    //     let tokens = tokenizer.tokenize()?;
-    //     assert_eq!(tokens, vec![Token::String("say \"hello\"".to_string())]);
-    //     Ok(())
-    // }
+    #[test]
+    fn test_escape_quote() -> Result<()> {
+        let mut tokenizer = Tokenizer::new(r#""say \"hello\"""#);
+        let tokens = tokenizer.tokenize()?;
+        assert_eq!(tokens, vec![Token::String("say \"hello\"".to_string())]);
+        Ok(())
+    }
 
-    // #[test]
-    // fn test_escape_backslash() -> Result<()> {
-    //     let mut tokenizer = Tokenizer::new(r#""path\\to\\file""#);
-    //     let tokens = tokenizer.tokenize()?;
-    //     assert_eq!(tokens, vec![Token::String("path\\to\\file".to_string())]);
-    //     Ok(())
-    // }
+    #[test]
+    fn test_escape_backslash() -> Result<()> {
+        let mut tokenizer = Tokenizer::new(r#""path\\to\\file""#);
+        let tokens = tokenizer.tokenize()?;
+        assert_eq!(tokens, vec![Token::String("path\\to\\file".to_string())]);
+        Ok(())
+    }
 
-    // #[test]
-    // fn test_multiple_escapes() -> Result<()> {
-    //     let mut tokenizer = Tokenizer::new(r#""a\nb\tc\"""#);
-    //     let tokens = tokenizer.tokenize()?;
-    //     assert_eq!(tokens, vec![Token::String("a\nb\tc\"".to_string())]);
-    //     Ok(())
-    // }
+    #[test]
+    fn test_multiple_escapes() -> Result<()> {
+        let mut tokenizer = Tokenizer::new(r#""a\nb\tc\"""#);
+        let tokens = tokenizer.tokenize()?;
+        assert_eq!(tokens, vec![Token::String("a\nb\tc\"".to_string())]);
+        Ok(())
+    }
+    #[test]
+    fn test_escape_forward_slash() -> Result<()> {
+        let mut tokenizer = Tokenizer::new(r#""a\/b""#);
+        let tokens = tokenizer.tokenize()?;
+        assert_eq!(tokens, vec![Token::String("a/b".to_string())]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_escape_carriage_return() -> Result<()> {
+        let mut tokenizer = Tokenizer::new(r#""line\r\n""#);
+        let tokens = tokenizer.tokenize()?;
+        assert_eq!(tokens, vec![Token::String("line\r\n".to_string())]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_escape_backspace_formfeed() -> Result<()> {
+        let mut tokenizer = Tokenizer::new(r#""\b\f""#);
+        let tokens = tokenizer.tokenize()?;
+        assert_eq!(tokens, vec![Token::String("\u{0008}\u{000C}".to_string())]);
+        Ok(())
+    }
 }
