@@ -23,7 +23,6 @@ pub struct Tokenizer {
 impl Tokenizer {
     pub fn new(input: &str) -> Self {
         let characters = input.chars().collect();
-        println!("These are the chars {:?}", characters);
         Self {
             input: characters,
             position: 0,
@@ -103,12 +102,28 @@ impl Tokenizer {
                                     'u' => {
                                         let mut hex_track = 0;
                                         let mut hex_value = String::new();
+                                        self.advance();
                                         while hex_track < 4 {
-                                            hex_value.push(ch);
+                                            let current_char = self.input[self.position];
+                                            hex_value.push(current_char);
                                             self.advance();
                                             hex_track += 1;
                                         }
-                                        println!("HEX Value is {}", &hex_value);
+                                        let st = u32::from_str_radix(&hex_value, 16);
+                                        match st {
+                                            Ok(st) => {
+                                                let cha = char::from_u32(st);
+                                                if let Some(chi) = cha {
+                                                    collected.push(chi);
+                                                }
+                                            }
+                                            Err(st) => {
+                                                return Err(JsonError::InvalidUnicode {
+                                                    sequence: st.to_string(),
+                                                    position: self.position,
+                                                });
+                                            }
+                                        }
                                     }
 
                                     _ => {
@@ -121,7 +136,6 @@ impl Tokenizer {
                             }
                             continue;
                         }
-                        println!("This {:?}", &nchar);
                         self.advance();
                         if nchar == '"' {
                             closed = true;
@@ -600,6 +614,41 @@ mod tests {
         let mut tokenizer = Tokenizer::new(r#""\b\f""#);
         let tokens = tokenizer.tokenize()?;
         assert_eq!(tokens, vec![Token::String("\u{0008}\u{000C}".to_string())]);
+        Ok(())
+    }
+    #[test]
+    fn test_unicode_escape_basic() -> Result<()> {
+        // \u0041 is 'A'
+        let mut tokenizer = Tokenizer::new(r#""\u0041""#);
+        let tokens = tokenizer.tokenize()?;
+        assert_eq!(tokens, vec![Token::String("A".to_string())]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_unicode_escape_multiple() -> Result<()> {
+        // \u0048\u0069 is "Hi"
+        let mut tokenizer = Tokenizer::new(r#""\u0048\u0069""#);
+        let tokens = tokenizer.tokenize()?;
+        assert_eq!(tokens, vec![Token::String("Hi".to_string())]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_unicode_escape_mixed() -> Result<()> {
+        // Mix of regular chars and unicode escapes
+        let mut tokenizer = Tokenizer::new(r#""Hello \u0057orld""#);
+        let tokens = tokenizer.tokenize()?;
+        assert_eq!(tokens, vec![Token::String("Hello World".to_string())]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_unicode_escape_lowercase() -> Result<()> {
+        // Lowercase hex digits should work too
+        let mut tokenizer = Tokenizer::new(r#""\u004a""#);
+        let tokens = tokenizer.tokenize()?;
+        assert_eq!(tokens, vec![Token::String("J".to_string())]);
         Ok(())
     }
 }
