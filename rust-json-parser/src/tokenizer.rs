@@ -125,7 +125,6 @@ impl Tokenizer {
                                             }
                                         }
                                     }
-
                                     _ => {
                                         return Err(JsonError::InvalidEscape {
                                             char: ch,
@@ -232,20 +231,15 @@ impl Tokenizer {
     }
 
     fn advance(&mut self) -> Option<char> {
-        let next_token = self.input.get(self.position).copied();
         self.position += 1;
-        next_token
+        self.input.get(self.position).copied()
     }
 
     fn peek(&self) -> Option<char> {
         self.input.get(self.position).copied()
     }
     fn is_at_end(&self) -> bool {
-        if let Some(_ch) = self.input.last() {
-            return true;
-        } else {
-            return false;
-        }
+        Some(self.input.last()).is_some()
     }
 }
 
