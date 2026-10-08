@@ -51,9 +51,9 @@ impl JsonParser {
         }
     }
 
-    pub fn advance(&mut self) -> Option<&Token> {
+    pub fn advance(&mut self) -> Option<Token> {
         self.position += 1;
-        self.tokens.get(self.position)
+        self.tokens.get(self.position).cloned()
     }
 }
 
