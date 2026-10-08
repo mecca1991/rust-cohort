@@ -16,14 +16,14 @@ impl JsonParser {
 
         match tokens {
             Ok(tokens) => Ok(Self {
-                tokens: tokens,
+                tokens,
                 position: 0,
             }),
             Err(_) => {
-                return Err(JsonError::UnexpectedEndOfInput {
+                Err(JsonError::UnexpectedEndOfInput {
                     expected: "JSON value".to_string(),
                     position: 0,
-                });
+                })
             }
         }
     }
@@ -56,33 +56,6 @@ impl JsonParser {
         self.tokens.get(self.position)
     }
 }
-
-// pub fn parse_json(input: &str) -> Result<JsonValue> {
-//     let input = input.trim();
-//     let mut tokenizer = Tokenizer::new(input);
-//     let tokens = tokenizer.tokenize()?;
-
-//     match tokens.as_slice() {
-//         [] => Err(JsonError::UnexpectedEndOfInput {
-//             expected: "JSON value".to_string(),
-//             position: 0,
-//         }),
-//         [Token::Boolean(value)] => Ok(JsonValue::Boolean(*value)),
-//         [Token::String(value)] => Ok(JsonValue::String(value.clone())),
-//         [Token::Number(value)] => Ok(JsonValue::Number(*value)),
-//         [Token::Null] => Ok(JsonValue::Null),
-//         [token] => Err(JsonError::UnexpectedToken {
-//             expected: "JSON value".to_string(),
-//             found: format!("{:?}", token),
-//             position: 0,
-//         }),
-//         [_, second, ..] => Err(JsonError::UnexpectedToken {
-//             expected: "End of input".to_string(),
-//             found: format!("{second:?}"),
-//             position: 0,
-//         }),
-//     }
-// }
 
 #[cfg(test)]
 mod test {
@@ -140,7 +113,7 @@ mod test {
     #[test]
     fn test_parse_error_empty() {
         let result = JsonParser::new("");
-        
+
         assert!(result.is_err());
 
         match result {
