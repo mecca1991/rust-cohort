@@ -11,21 +11,18 @@ pub struct JsonParser {
 
 impl JsonParser {
     pub fn new(input: &str) -> Result<JsonParser> {
-        let mut tokenizer = Tokenizer::new(input.trim());
-        let tokens = tokenizer.tokenize();
-
-        match tokens {
-            Ok(tokens) => Ok(Self {
-                tokens,
+        if input.is_empty() {
+            return Err(JsonError::UnexpectedEndOfInput {
+                expected: "JSON value".to_string(),
                 position: 0,
-            }),
-            Err(_) => {
-                Err(JsonError::UnexpectedEndOfInput {
-                    expected: "JSON value".to_string(),
-                    position: 0,
-                })
-            }
+            });
         }
+        let mut tokenizer = Tokenizer::new(input);
+        let tokens = tokenizer.tokenize()?;
+        Ok(Self {
+            tokens,
+            position: 0,
+        })
     }
 
     pub fn parse(&mut self) -> Result<JsonValue> {
@@ -113,7 +110,6 @@ mod test {
     #[test]
     fn test_parse_error_empty() {
         let result = JsonParser::new("");
-
         assert!(result.is_err());
 
         match result {
@@ -143,22 +139,22 @@ mod test {
         Ok(())
     }
 
-    // #[test]
-    // fn test_result_pattern_matching() {
-    //     let mut parser = JsonParser::new("42")?;
-    //     let result: JsonValue = parser.parse()?;
-    //     match result {
-    //         Ok(JsonValue::Number(n)) => assert_eq!(n, 42.0),
-    //         _ => panic!("Expected successful number parse"),
-    //     }
-    //     let mut parser = JsonParser::new("@invalid@");
-    //     let result = parser.parse();
+    #[test]
+    fn test_result_pattern_matching() -> Result<()> {
+        let mut parser = JsonParser::new("42")?;
+        let result = parser.parse();
+        match result {
+            Ok(JsonValue::Number(n)) => assert_eq!(n, 42.0),
+            _ => panic!("Expected successful number parse"),
+        }
 
-    //     match result {
-    //         Err(JsonError::UnexpectedToken { .. }) => {} // Expected
-    //         _ => panic!("Expected UnexpectedToken error"),
-    //     }
-    // }
+        let result = JsonParser::new("@invalid@");
+
+        match result {
+            Err(JsonError::UnexpectedToken { .. }) => Ok(()), // Expected
+            _ => panic!("Expected UnexpectedToken error"),
+        }
+    }
     #[test]
     fn test_parser_creation() {
         let parser = JsonParser::new("42");

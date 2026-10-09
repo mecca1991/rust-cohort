@@ -231,15 +231,13 @@ impl Tokenizer {
     }
 
     fn advance(&mut self) -> Option<char> {
+        let next_token = self.input.get(self.position).copied();
         self.position += 1;
-        self.input.get(self.position).copied()
+        next_token
     }
 
     fn peek(&self) -> Option<char> {
         self.input.get(self.position).copied()
-    }
-    fn is_at_end(&self) -> bool {
-        Some(self.input.last()).is_some()
     }
 }
 

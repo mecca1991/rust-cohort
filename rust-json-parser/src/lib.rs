@@ -35,18 +35,15 @@ mod tests {
         let mut parser = JsonParser::new("null")?;
         assert_eq!(parser.parse()?, JsonValue::Null);
 
-        let mut parser = JsonParser::new("hello")?;
+        let mut parser = JsonParser::new(r#""hello""#)?;
         assert_eq!(parser.parse()?, JsonValue::String("hello".to_string()));
-
         Ok(())
     }
 
     #[test]
-    fn test_error_propagation() {
+    fn test_error_propagation() -> Result<()> {
         // Test that errors propagate properly with correct details
-        let mut parser = JsonParser::new("@invalid@")?;
-
-        let result = parser.parse();
+        let result = JsonParser::new("@invalid@");
         assert!(result.is_err());
 
         // Validate error details through pattern matching
@@ -59,6 +56,7 @@ mod tests {
                 assert_eq!(expected, "valid JSON token");
                 assert_eq!(found, "@");
                 assert_eq!(position, 0);
+                Ok(())
             }
             _ => panic!("Expected UnexpectedToken error"),
         }
