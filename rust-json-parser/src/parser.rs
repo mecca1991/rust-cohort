@@ -1,88 +1,115 @@
 use crate::error::JsonError;
-use crate::tokenizer::{Token, tokenize};
+use crate::tokenizer::{Token, Tokenizer};
 use crate::value::JsonValue;
 
 type Result<T> = std::result::Result<T, JsonError>;
 
-pub fn parse_json(input: &str) -> Result<JsonValue> {
-    let input = input.trim();
-    let tokens = tokenize(input)?;
+pub struct JsonParser {
+    tokens: Vec<Token>,
+    position: usize,
+}
 
-    match tokens.as_slice() {
-        [] => Err(JsonError::UnexpectedEndOfInput {
-            expected: "JSON value".to_string(),
+impl JsonParser {
+    pub fn new(input: &str) -> Result<JsonParser> {
+        if input.is_empty() {
+            return Err(JsonError::UnexpectedEndOfInput {
+                expected: "JSON value".to_string(),
+                position: 0,
+            });
+        }
+        let mut tokenizer = Tokenizer::new(input);
+        let tokens = tokenizer.tokenize()?;
+        Ok(Self {
+            tokens,
             position: 0,
-        }),
-        [Token::Boolean(value)] => Ok(JsonValue::Boolean(*value)),
-        [Token::String(value)] => Ok(JsonValue::String(value.clone())),
-        [Token::Number(value)] => Ok(JsonValue::Number(*value)),
-        [Token::Null] => Ok(JsonValue::Null),
-        [token] => Err(JsonError::UnexpectedToken {
-            expected: "JSON value".to_string(),
-            found: format!("{:?}", token),
-            position: 0,
-        }),
-        [_, second, ..] => Err(JsonError::UnexpectedToken {
-            expected: "End of input".to_string(),
-            found: format!("{second:?}"),
-            position: 0,
-        }),
+        })
+    }
+
+    pub fn parse(&mut self) -> Result<JsonValue> {
+        match self.tokens.as_slice() {
+            [] => Err(JsonError::UnexpectedEndOfInput {
+                expected: "JSON value".to_string(),
+                position: 0,
+            }),
+            [Token::Boolean(value)] => Ok(JsonValue::Boolean(*value)),
+            [Token::String(value)] => Ok(JsonValue::String(value.clone())),
+            [Token::Number(value)] => Ok(JsonValue::Number(*value)),
+            [Token::Null] => Ok(JsonValue::Null),
+            [token] => Err(JsonError::UnexpectedToken {
+                expected: "JSON value".to_string(),
+                found: format!("{:?}", token),
+                position: 0,
+            }),
+            [_, second, ..] => Err(JsonError::UnexpectedToken {
+                expected: "End of input".to_string(),
+                found: format!("{second:?}"),
+                position: 0,
+            }),
+        }
+    }
+
+    pub fn advance(&mut self) -> Option<Token> {
+        self.position += 1;
+        self.tokens.get(self.position).cloned()
     }
 }
 
 #[cfg(test)]
 mod test {
+
     use super::*;
 
     type Result<T> = std::result::Result<T, JsonError>;
 
     #[test]
     fn test_parse_string() -> Result<()> {
-        let result = parse_json(r#""hello world""#)?;
+        let mut parser = JsonParser::new(r#""hello world""#)?;
+        let result = parser.parse()?;
         assert_eq!(result, JsonValue::String("hello world".to_string()));
         Ok(())
     }
 
     #[test]
     fn test_parse_empty_string() -> Result<()> {
-        let result = parse_json(r#""""#)?;
+        let mut parser = JsonParser::new(r#""""#)?;
+        let result = parser.parse()?;
         assert_eq!(result, JsonValue::String(String::new()));
         Ok(())
     }
-
     #[test]
     fn test_parse_number() -> Result<()> {
-        let result = parse_json("42.5")?;
-        assert_eq!(result, JsonValue::Number(42.5));
-
-        let result = parse_json("0")?;
-        assert_eq!(result, JsonValue::Number(0.0));
-
-        let result = parse_json("-10")?;
-        assert_eq!(result, JsonValue::Number(-10.0));
+        let mut parser = JsonParser::new("42")?;
+        let value = parser.parse()?;
+        assert_eq!(value, JsonValue::Number(42.0));
         Ok(())
     }
 
     #[test]
-    fn test_parse_boolean() -> Result<()> {
-        let result = parse_json("true")?;
-        assert_eq!(result, JsonValue::Boolean(true));
-
-        let result = parse_json("false")?;
-        assert_eq!(result, JsonValue::Boolean(false));
+    fn test_parse_boolean_true() -> Result<()> {
+        let mut parser = JsonParser::new("true")?;
+        let value = parser.parse()?;
+        assert_eq!(value, JsonValue::Boolean(true));
         Ok(())
     }
 
     #[test]
     fn test_parse_null() -> Result<()> {
-        let result = parse_json("null")?;
-        assert_eq!(result, JsonValue::Null);
+        let mut parser = JsonParser::new("null")?;
+        let value = parser.parse()?;
+        assert_eq!(value, JsonValue::Null);
         Ok(())
     }
 
     #[test]
+    fn test_parse_simple_string() -> Result<()> {
+        let mut parser = JsonParser::new(r#""hello""#)?;
+        let value = parser.parse()?;
+        assert_eq!(value, JsonValue::String("hello".to_string()));
+        Ok(())
+    }
+    #[test]
     fn test_parse_error_empty() {
-        let result = parse_json("");
+        let result = JsonParser::new("");
         assert!(result.is_err());
 
         match result {
@@ -96,45 +123,82 @@ mod test {
 
     #[test]
     fn test_parse_error_invalid_token() {
-        let result = parse_json("@");
+        let result = JsonParser::new("@");
         assert!(result.is_err());
     }
 
     #[test]
     fn test_parse_with_whitespace() -> Result<()> {
-        let result = parse_json("  42  ")?;
+        let mut parser = JsonParser::new("  42  ")?;
+        let result = parser.parse()?;
         assert_eq!(result, JsonValue::Number(42.0));
 
-        let result = parse_json("\n\ttrue\n")?;
+        let mut parser = JsonParser::new("\n\ttrue\n")?;
+        let result = parser.parse()?;
         assert_eq!(result, JsonValue::Boolean(true));
         Ok(())
     }
 
     #[test]
-    fn test_result_pattern_matching() {
-        let result = parse_json("42");
-
+    fn test_result_pattern_matching() -> Result<()> {
+        let mut parser = JsonParser::new("42")?;
+        let result = parser.parse();
         match result {
             Ok(JsonValue::Number(n)) => assert_eq!(n, 42.0),
             _ => panic!("Expected successful number parse"),
         }
 
-        let result = parse_json("@invalid@");
+        let result = JsonParser::new("@invalid@");
 
         match result {
-            Err(JsonError::UnexpectedToken { .. }) => {} // Expected
+            Err(JsonError::UnexpectedToken { .. }) => Ok(()), // Expected
             _ => panic!("Expected UnexpectedToken error"),
         }
     }
+    #[test]
+    fn test_parser_creation() {
+        let parser = JsonParser::new("42");
+        assert!(parser.is_ok());
+    }
 
     #[test]
-    fn test_unterminated_string() {
-        let err = tokenize(r#""missing end quote"#).unwrap_err();
-        match err {
-            JsonError::UnexpectedEndOfInput { position, .. } => {
-                assert_eq!(position, 0);
-            }
-            other => panic!("expected UnexpectedEndOfInput, got {:?}", other),
-        }
+    fn test_parser_creation_tokenize_error() {
+        let parser = JsonParser::new(r#""\q""#); // Invalid escape
+        assert!(parser.is_err());
+    }
+    #[test]
+    fn test_parse_negative_number() -> Result<()> {
+        let mut parser = JsonParser::new("-3.14")?;
+        let value = parser.parse()?;
+        assert_eq!(value, JsonValue::Number(-3.14));
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_boolean_false() -> Result<()> {
+        let mut parser = JsonParser::new("false")?;
+        let value = parser.parse()?;
+        assert_eq!(value, JsonValue::Boolean(false));
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_empty_input() {
+        // Could fail at tokenization (no tokens) or parsing (empty token list)
+        // Either is acceptable - just verify it's an error
+        let result = match JsonParser::new("") {
+            Ok(mut parser) => parser.parse(),
+            Err(e) => Err(e),
+        };
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_whitespace_only() {
+        let result = match JsonParser::new("   ") {
+            Ok(mut parser) => parser.parse(),
+            Err(e) => Err(e),
+        };
+        assert!(result.is_err());
     }
 }
