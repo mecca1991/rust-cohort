@@ -1,7 +1,6 @@
-use crate::Token::Comma;
 use crate::error::JsonError;
 use crate::tokenizer::{Token, Tokenizer};
-use crate::value::{self, JsonValue};
+use crate::value::JsonValue;
 
 type Result<T> = std::result::Result<T, JsonError>;
 
@@ -33,32 +32,22 @@ impl JsonParser {
         let token = self.tokens.get(self.position);
         if let Some(token) = token {
             match token {
-                Token::Boolean(value) => {
-                    Ok(JsonValue::Boolean(*value))
-                }
-                Token::String(value) => {
-                    Ok(JsonValue::String(value.clone()))
-                },
-                Token::Number(value) => {
-                    Ok(JsonValue::Number(*value))
-                },
-                Token::Null => {
-                    Ok(JsonValue::Null)
-                },
-                Token::LeftBracket => {
-                    self.parse_array()
-                }
-                _ => {
-                    println!("Skipped token is {:?}", token);
-                    Ok(JsonValue::Null)
-                }
+                Token::Boolean(value) => Ok(JsonValue::Boolean(*value)),
+                Token::String(value) => Ok(JsonValue::String(value.clone())),
+                Token::Number(value) => Ok(JsonValue::Number(*value)),
+                Token::LeftBracket => self.parse_array(),
+                Token::Null => Ok(JsonValue::Null),
+                _ => Err(JsonError::UnexpectedEndOfInput {
+                    expected: "JSON value".to_string(),
+                    position: self.position,
+                }),
             }
         } else {
             return Err(JsonError::UnexpectedToken {
                 expected: "JSON value".to_string(),
                 found: format!("{:?}", token),
                 position: 0,
-            })
+            });
         }
     }
 
@@ -74,21 +63,22 @@ impl JsonParser {
     fn parse_array(&mut self) -> Result<JsonValue> {
         let mut array_data: Vec<JsonValue> = Vec::new();
         while let Some(token) = self.tokens.get(self.position) {
-            println!("Entering Loop {:?}", token);
             match token {
+                Token::LeftBracket => {
+                    self.advance();
+                    continue;
+                }
                 Token::RightBracket => {
                     self.advance();
-                },
+                    break;
+                }
                 Token::Comma => {
                     self.advance();
-                    break;
-
-                },
-                
+                    continue;
+                }
                 _ => {
-                    println!("We are in the exception {:?}", &token);
-                    self.advance();
                     array_data.push(self.parse_value()?);
+                    self.advance();
                 }
             }
         }
