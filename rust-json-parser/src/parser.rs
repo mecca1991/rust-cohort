@@ -1,6 +1,7 @@
+use crate::Token::Comma;
 use crate::error::JsonError;
 use crate::tokenizer::{Token, Tokenizer};
-use crate::value::JsonValue;
+use crate::value::{self, JsonValue};
 
 type Result<T> = std::result::Result<T, JsonError>;
 
@@ -25,31 +26,73 @@ impl JsonParser {
     }
 
     pub fn parse(&mut self) -> Result<JsonValue> {
-        match self.tokens.as_slice() {
-            [] => Err(JsonError::UnexpectedEndOfInput {
-                expected: "JSON value".to_string(),
-                position: 0,
-            }),
-            [Token::Boolean(value)] => Ok(JsonValue::Boolean(*value)),
-            [Token::String(value)] => Ok(JsonValue::String(value.clone())),
-            [Token::Number(value)] => Ok(JsonValue::Number(*value)),
-            [Token::Null] => Ok(JsonValue::Null),
-            [token] => Err(JsonError::UnexpectedToken {
+        self.parse_value()
+    }
+
+    pub fn parse_value(&mut self) -> Result<JsonValue> {
+        let token = self.tokens.get(self.position);
+        if let Some(token) = token {
+            match token {
+                Token::Boolean(value) => {
+                    Ok(JsonValue::Boolean(*value))
+                }
+                Token::String(value) => {
+                    Ok(JsonValue::String(value.clone()))
+                },
+                Token::Number(value) => {
+                    Ok(JsonValue::Number(*value))
+                },
+                Token::Null => {
+                    Ok(JsonValue::Null)
+                },
+                Token::LeftBracket => {
+                    self.parse_array()
+                }
+                _ => {
+                    println!("Skipped token is {:?}", token);
+                    Ok(JsonValue::Null)
+                }
+            }
+        } else {
+            return Err(JsonError::UnexpectedToken {
                 expected: "JSON value".to_string(),
                 found: format!("{:?}", token),
                 position: 0,
-            }),
-            [_, second, ..] => Err(JsonError::UnexpectedToken {
-                expected: "End of input".to_string(),
-                found: format!("{second:?}"),
-                position: 0,
-            }),
+            })
         }
     }
 
     pub fn advance(&mut self) -> Option<Token> {
         self.position += 1;
         self.tokens.get(self.position).cloned()
+    }
+
+    pub fn peek(&self) -> Option<Token> {
+        self.tokens.get(self.position).cloned()
+    }
+
+    fn parse_array(&mut self) -> Result<JsonValue> {
+        let mut array_data: Vec<JsonValue> = Vec::new();
+        while let Some(token) = self.tokens.get(self.position) {
+            println!("Entering Loop {:?}", token);
+            match token {
+                Token::RightBracket => {
+                    self.advance();
+                },
+                Token::Comma => {
+                    self.advance();
+                    break;
+
+                },
+                
+                _ => {
+                    println!("We are in the exception {:?}", &token);
+                    self.advance();
+                    array_data.push(self.parse_value()?);
+                }
+            }
+        }
+        Ok(JsonValue::Array(array_data))
     }
 }
 

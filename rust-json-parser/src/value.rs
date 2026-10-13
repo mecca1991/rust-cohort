@@ -1,9 +1,13 @@
+use std::collections::HashMap;
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum JsonValue {
     Null,
     Boolean(bool),
     Number(f64),
     String(String),
+    Array(Vec<JsonValue>),
+    Object(HashMap<String, JsonValue>),
 }
 
 impl JsonValue {
@@ -28,7 +32,35 @@ impl JsonValue {
             _ => None,
         }
     }
+    pub fn as_array(&self) -> Option<&Vec<JsonValue>> {
+        match self {
+            JsonValue::Array(val) => Some(val),
+            _ => None,
+        }
+    }
+    pub fn as_object(&self) -> Option<&HashMap<String, JsonValue>> {
+        match self {
+            JsonValue::Object(val) => Some(val),
+            _ => None,
+        }
+    }
+    pub fn get(&self, key: &str) -> Option<&JsonValue> {
+        match self {
+            JsonValue::Object(obj) => obj.get(key),
+            _ => None,
+        }
+    }
+    pub fn get_index(&self, index: usize) -> Option<&JsonValue> {
+        match self {
+            JsonValue::Array(arr) => arr.get(index),
+            _ => None,
+        }
+    }
 }
+
+// impl fmt::Display for JsonValue {
+//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { /* ... */ }
+// }
 
 #[cfg(test)]
 mod tests {

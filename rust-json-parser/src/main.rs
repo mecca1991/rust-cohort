@@ -1,7 +1,7 @@
 use rust_json_parser::JsonParser;
 
 fn main() {
-    let input = r#""The quick brown fox jumps over the lazy dog""#;
+    let input = r#"["The quick brown fox jumps over the lazy dog"]"#;
     let result = JsonParser::new(input);
     match result {
         Ok(mut parser) => {
