@@ -26,7 +26,7 @@ mod tests {
     #[test]
     fn test_integration() -> Result<()> {
         // Test the full parsing pipeline
-        let value  = JsonParser::new("42.0")?.parse()?;
+        let value = JsonParser::new("42.0")?.parse()?;
         assert_eq!(value, JsonValue::Number(42.0));
 
         let value = JsonParser::new("true")?.parse()?;

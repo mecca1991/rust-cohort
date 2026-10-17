@@ -18,7 +18,6 @@ impl JsonParser {
             });
         }
         let tokens = Tokenizer::new(input).tokenize()?;
-        println!("This is the input {}", &input);
         Ok(Self {
             tokens,
             position: 0,

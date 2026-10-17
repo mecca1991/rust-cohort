@@ -93,26 +93,22 @@ impl Tokenizer {
                         if let Some(ch) = char::from_u32(st) {
                             Ok(ch)
                         } else {
-                            return Err(JsonError::InvalidUnicode {
+                            Err(JsonError::InvalidUnicode {
                                 sequence: hex_value.to_string(),
                                 position: self.position,
-                            });
+                            })
                         }
                     }
-                    Err(st) => {
-                        return Err(JsonError::InvalidUnicode {
-                            sequence: st.to_string(),
-                            position: self.position,
-                        });
-                    }
+                    Err(st) => Err(JsonError::InvalidUnicode {
+                        sequence: st.to_string(),
+                        position: self.position,
+                    }),
                 }
             }
-            _ => {
-                return Err(JsonError::InvalidEscape {
-                    char: ch,
-                    position: self.position,
-                });
-            }
+            _ => Err(JsonError::InvalidEscape {
+                char: ch,
+                position: self.position,
+            }),
         }
     }
     pub fn tokenize(&mut self) -> Result<Vec<Token>, JsonError> {
