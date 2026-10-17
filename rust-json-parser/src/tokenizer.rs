@@ -31,7 +31,7 @@ impl Tokenizer {
         }
     }
 
-    pub fn parse_special_chars(&mut self, ch: char) -> Result<char, JsonError> {
+    fn get_real_char(&mut self, ch: char) -> Result<char, JsonError> {
         match ch {
             'n' => {
                 self.advance();
@@ -99,14 +99,54 @@ impl Tokenizer {
                             })
                         }
                     }
-                    Err(st) => Err(JsonError::InvalidUnicode {
-                        sequence: st.to_string(),
+                    Err(_) => Err(JsonError::InvalidUnicode {
+                        sequence: hex_value.to_string(),
                         position: self.position,
                     }),
                 }
             }
             _ => Err(JsonError::InvalidEscape {
                 char: ch,
+                position: self.position,
+            }),
+        }
+    }
+    fn tokenize_boolean_string(&mut self, matched_str: &str) -> Result<Token, JsonError> {
+        match matched_str {
+            "null" => Ok(Token::Null),
+            "true" => Ok(Token::Boolean(true)),
+            "false" => Ok(Token::Boolean(false)),
+            _ => Err(JsonError::UnexpectedToken {
+                expected: "Boolean value or Null value".to_string(),
+                found: matched_str.to_string(),
+                position: self.position,
+            }),
+        }
+    }
+    fn tokenize_numeric_string(&mut self) -> Result<Token, JsonError> {
+        let mut num_string: String = String::new();
+        while let Some(value) = self.peek() {
+            if !(value.is_numeric()
+                || value.to_string().starts_with("-")
+                || value.to_string().contains("."))
+            {
+                break;
+            }
+            num_string.push(value);
+            self.advance();
+        }
+        if num_string.is_empty() || num_string.starts_with(".") {
+            return Err(JsonError::UnexpectedToken {
+                position: 0,
+                expected: "JSON Value".to_string(),
+                found: ".".to_string(),
+            });
+        }
+        let res = num_string.parse::<f64>();
+        match res {
+            Ok(item) => Ok(Token::Number(item)),
+            Err(err) => Err(JsonError::InvalidNumber {
+                value: format!("{err:?}"),
                 position: self.position,
             }),
         }
@@ -140,15 +180,14 @@ impl Tokenizer {
                     self.advance();
                 }
                 '"' => {
-                    let mut closed = false;
                     self.advance();
+                    let mut closed = false;
                     let mut collected = String::new();
-                    while self.peek().is_some() {
-                        let nchar = self.input[self.position];
+                    while let Some(nchar) = self.peek() {
                         if nchar == '\\' {
                             self.advance();
                             if let Some(ch) = self.peek() {
-                                let cha = self.parse_special_chars(ch)?;
+                                let cha = self.get_real_char(ch)?;
                                 collected.push(cha);
                             }
                             continue;
@@ -166,42 +205,12 @@ impl Tokenizer {
                             expected: "JSON value".to_string(),
                             position: 0,
                         });
-                    } else {
-                        tokens.push(Token::String(collected));
                     }
+                    tokens.push(Token::String(collected));
                 }
                 ch if ch.is_numeric() || (ch == '-') || (ch == '.') => {
-                    let mut num_string: String = String::new();
-                    while let Some(value) = self.peek() {
-                        if value.is_numeric()
-                            || value.to_string().starts_with("-")
-                            || value.to_string().contains(".")
-                        {
-                            num_string.push(value);
-                            self.advance();
-                        } else {
-                            break;
-                        }
-                        if num_string.starts_with(".") {
-                            return Err(JsonError::UnexpectedToken {
-                                position: 0,
-                                expected: "JSON Value".to_string(),
-                                found: ".".to_string(),
-                            });
-                        }
-                    }
-                    if !num_string.is_empty() {
-                        let num = num_string.parse();
-                        match num {
-                            Ok(num) => tokens.push(Token::Number(num)),
-                            Err(error) => {
-                                return Err(JsonError::InvalidNumber {
-                                    value: format!("{error:?}"),
-                                    position: self.position,
-                                });
-                            }
-                        }
-                    }
+                    let token = self.tokenize_numeric_string()?;
+                    tokens.push(token);
                 }
                 ch if ch == 't' || ch == 'f' || ch == 'n' => {
                     let mut match_str = String::new();
@@ -212,27 +221,8 @@ impl Tokenizer {
                         match_str.push(nchar);
                         self.advance();
                     }
-                    if &match_str == "null" {
-                        tokens.push(Token::Null);
-                    } else if &match_str == "true" || &match_str == "false" {
-                        let matched = match_str.parse();
-                        match matched {
-                            Ok(item) => tokens.push(Token::Boolean(item)),
-                            Err(_error) => {
-                                return Err(JsonError::UnexpectedToken {
-                                    expected: "true or false boolean value".to_string(),
-                                    found: match_str.to_string(),
-                                    position: self.position,
-                                });
-                            }
-                        }
-                    } else {
-                        return Err(JsonError::UnexpectedToken {
-                            expected: "Boolean value or Null value".to_string(),
-                            found: match_str.to_string(),
-                            position: self.position,
-                        });
-                    }
+                    let token = self.tokenize_boolean_string(&match_str)?;
+                    tokens.push(token);
                 }
                 ' ' | '\n' | '\r' | '\t' => {
                     self.advance();
