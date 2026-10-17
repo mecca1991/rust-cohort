@@ -26,17 +26,17 @@ mod tests {
     #[test]
     fn test_integration() -> Result<()> {
         // Test the full parsing pipeline
-        let mut parser = JsonParser::new("42.0")?;
-        assert_eq!(parser.parse()?, JsonValue::Number(42.0));
+        let value  = JsonParser::new("42.0")?.parse()?;
+        assert_eq!(value, JsonValue::Number(42.0));
 
-        let mut parser = JsonParser::new("true")?;
-        assert_eq!(parser.parse()?, JsonValue::Boolean(true));
+        let value = JsonParser::new("true")?.parse()?;
+        assert_eq!(value, JsonValue::Boolean(true));
 
-        let mut parser = JsonParser::new("null")?;
-        assert_eq!(parser.parse()?, JsonValue::Null);
+        let value = JsonParser::new("null")?.parse()?;
+        assert_eq!(value, JsonValue::Null);
 
-        let mut parser = JsonParser::new(r#""hello""#)?;
-        assert_eq!(parser.parse()?, JsonValue::String("hello".to_string()));
+        let value = JsonParser::new(r#""hello""#)?.parse()?;
+        assert_eq!(value, JsonValue::String("hello".to_string()));
         Ok(())
     }
 
