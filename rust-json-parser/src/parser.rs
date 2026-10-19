@@ -31,16 +31,32 @@ impl JsonParser {
     }
 
     pub fn parse_value(&mut self) -> Result<JsonValue> {
-        let token = self.tokens.get(self.position);
+        let token = self.tokens.get(self.position).cloned();
         if let Some(token) = token {
             match token {
-                Token::Boolean(value) => Ok(JsonValue::Boolean(*value)),
-                Token::String(value) => Ok(JsonValue::String(value.clone())),
-                Token::Number(value) => Ok(JsonValue::Number(*value)),
-                Token::LeftBracket => self.parse_array(),
-                Token::LeftBrace => self.parse_object(),
-                Token::Colon => self.parse_object(),
-                Token::Null => Ok(JsonValue::Null),
+                Token::Boolean(value) => {
+                    self.advance();
+                    Ok(JsonValue::Boolean(value))
+                },
+                Token::String(value) => {
+                    self.advance();
+                    Ok(JsonValue::String(value))
+                },
+                Token::Number(value) => {
+                    self.advance();
+                    Ok(JsonValue::Number(value))
+                },
+                Token::LeftBracket => {
+                    self.advance();
+                    self.parse_array()
+                },
+                Token::LeftBrace => {
+                    self.parse_object()
+                },
+                Token::Null => {
+                    self.advance();
+                    Ok(JsonValue::Null)
+                },
                 _ => Err(JsonError::UnexpectedEndOfInput {
                     expected: "JSON value".to_string(),
                     position: self.position,
@@ -54,13 +70,23 @@ impl JsonParser {
             })
         }
     }
-    pub fn advance(&mut self) -> Option<Token> {
-        self.position += 1;
+
+    fn advance(&mut self) -> Option<Token> {
+        let token = self.tokens.get(self.position).cloned();
+        if self.is_at_end() {
+            token
+        } else {
+            self.position += 1;
+            token
+        }
+    }    
+
+    fn peek(&self) -> Option<Token> {
         self.tokens.get(self.position).cloned()
     }
 
-    pub fn peek(&self) -> Option<Token> {
-        self.tokens.get(self.position).cloned()
+    fn is_at_end(&self) -> bool {
+        self.position >= self.tokens.len()
     }
 
     fn parse_object(&mut self) -> Result<JsonValue> {
@@ -71,7 +97,7 @@ impl JsonParser {
                 Token::LeftBrace => {
                     let next_token = self.advance();
                     if next_token == Some(Token::RightBrace) {
-                        break;
+                        continue;
                     }
                     let parsed_key = self.parse_value()?;
                     let key_slice = parsed_key.as_str();
@@ -110,11 +136,11 @@ impl JsonParser {
 
     fn parse_array(&mut self) -> Result<JsonValue> {
         let mut array_data: Vec<JsonValue> = Vec::new();
-        while let Some(token) = self.tokens.get(self.position) {
+        while let Some(token) = self.peek() {
             match token {
                 Token::LeftBracket => {
                     self.advance();
-                    continue;
+                    array_data.push(self.parse_array()?);
                 }
                 Token::RightBracket => {
                     self.advance();
@@ -122,11 +148,9 @@ impl JsonParser {
                 }
                 Token::Comma => {
                     self.advance();
-                    continue;
                 }
                 _ => {
                     array_data.push(self.parse_value()?);
-                    self.advance();
                 }
             }
         }

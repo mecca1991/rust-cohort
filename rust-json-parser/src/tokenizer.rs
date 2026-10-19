@@ -238,7 +238,7 @@ impl Tokenizer {
         }
         Ok(tokens)
     }
-    
+
     fn advance(&mut self) -> Option<char> {
         let token = self.input.get(self.position).copied();
         if self.is_at_end() {
