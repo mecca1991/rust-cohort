@@ -92,20 +92,32 @@ impl JsonParser {
     fn parse_object(&mut self) -> Result<JsonValue> {
         let mut hash_items: HashMap<String, JsonValue> = HashMap::new();
         let mut current_key = String::new();
-        while let Some(token) = self.tokens.get(self.position) {
+        while let Some(token) = self.tokens.get(self.position).cloned() {
+            println!("Current Position OUTSIDE: {:?}", &token);
             match token {
                 Token::LeftBrace => {
-                    let next_token = self.advance();
-                    if next_token == Some(Token::RightBrace) {
-                        continue;
-                    }
-                    let parsed_key = self.parse_value()?;
-                    let key_slice = parsed_key.as_str();
-                    if let Some(key) = key_slice {
-                        current_key = key.to_string();
-                        hash_items.insert(current_key.clone(), JsonValue::Null);
-                        continue;
-                    } else {
+                    self.advance();
+                    if let Some(token) = self.peek() {
+                        println!("This is the actual token {:?}", token);
+                        if std::mem::discriminant(&token) == std::mem::discriminant(&Token::RightBrace) {
+                            continue;
+                        }
+                        let parsed_key = self.parse_value()?;
+                        let key_slice = parsed_key.as_str();
+                        if let Some(key) = key_slice {
+                            current_key = key.to_string();
+                            hash_items.insert(current_key.clone(), JsonValue::Null);
+                        } else {
+                            return Err(JsonError::UnexpectedEndOfInput { 
+                                expected: "Json Key".to_string(), 
+                                position: self.position
+                            })
+                        }
+                    } 
+                    if let Some(token) = self.peek() {
+                        if std::mem::discriminant(&token) == std::mem::discriminant(&Token::Colon) {
+                            continue;   
+                        }
                         return Err(JsonError::UnexpectedEndOfInput {
                             expected: "JSON value".to_string(),
                             position: self.position,
@@ -124,7 +136,20 @@ impl JsonParser {
                     self.advance();
                     let value = self.parse_value()?;
                     hash_items.insert(current_key.clone(), value);
-                    continue;
+                    
+                    if let Some(token) = self.peek(){
+                        if std::mem::discriminant(&token) != std::mem::discriminant(&Token::Comma) && std::mem::discriminant(&token) != std::mem::discriminant(&Token::RightBrace){ 
+                            return Err(JsonError::UnexpectedEndOfInput { 
+                                expected: ",".to_string(), 
+                                position: self.position 
+                            })
+                        }
+                    } else {
+                        return Err(JsonError::UnexpectedEndOfInput { 
+                            expected: ",".to_string(), 
+                            position: self.position 
+                        })
+                    }
                 }
                 _ => {
                     self.advance();
