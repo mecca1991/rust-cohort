@@ -128,7 +128,17 @@ impl JsonParser {
                 }
                 Token::Comma => {
                     self.advance();
-                    current_key = self.parse_value()?.as_str().unwrap().to_string();
+                    let value = self.parse_value()?;
+                    current_key = match value {
+                        JsonValue::String(key) => key,
+                        unexpected => {
+                            return Err(JsonError::UnexpectedToken {
+                                expected: "JSON object key".to_string(),
+                                found: unexpected.to_string(),
+                                position: self.position,
+                            });
+                        }
+                    };
                 }
                 Token::Colon => {
                     self.advance();
