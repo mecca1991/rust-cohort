@@ -71,7 +71,7 @@ impl fmt::Display for JsonValue {
                 write!(f, "{}", val)
             }
             JsonValue::String(val) => {
-                let final_val = val.replace("\"", "\\\"");
+                let final_val = val.replace("\"", "\\\"").replace("\n", "\\n");
                 write!(f, "\"{}\"", final_val)
             }
             JsonValue::Array(items) => {
