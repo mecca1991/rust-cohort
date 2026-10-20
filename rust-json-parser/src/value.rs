@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum JsonValue {
@@ -58,9 +58,48 @@ impl JsonValue {
     }
 }
 
-// impl fmt::Display for JsonValue {
-//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { /* ... */ }
-// }
+impl fmt::Display for JsonValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            JsonValue::Null => {
+                write!(f, "null")
+            }
+            JsonValue::Number(num) => {
+                write!(f, "{}", num)
+            }
+            JsonValue::Boolean(val) => {
+                write!(f, "{}", val)
+            }
+            JsonValue::String(val) => {
+                write!(f, "{}", val)
+            }
+            JsonValue::Array(items) => {
+                write!(f, "[")?;
+                for (index, value) in items.iter().enumerate() {
+                    if index == 0 {
+                        write!(f, "{}", value)?;
+                    } else {
+                        write!(f, ",{}", value)?
+                    }
+                }
+                write!(f, "]")?;
+                Ok(())
+            }
+            JsonValue::Object(items) => {
+                write!(f, "{{")?;
+                for (index, (k, v)) in items.iter().enumerate() {
+                    if index == 0 {
+                        write!(f, "{}:{}", k, v)?;
+                    } else {
+                        write!(f, ",{}:{}", k, v)?
+                    }
+                }
+                write!(f, "}}")?;
+                Ok(())
+            }
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {

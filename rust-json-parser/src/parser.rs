@@ -37,26 +37,24 @@ impl JsonParser {
                 Token::Boolean(value) => {
                     self.advance();
                     Ok(JsonValue::Boolean(value))
-                },
+                }
                 Token::String(value) => {
                     self.advance();
                     Ok(JsonValue::String(value))
-                },
+                }
                 Token::Number(value) => {
                     self.advance();
                     Ok(JsonValue::Number(value))
-                },
+                }
                 Token::LeftBracket => {
                     self.advance();
                     self.parse_array()
-                },
-                Token::LeftBrace => {
-                    self.parse_object()
-                },
+                }
+                Token::LeftBrace => self.parse_object(),
                 Token::Null => {
                     self.advance();
                     Ok(JsonValue::Null)
-                },
+                }
                 _ => Err(JsonError::UnexpectedEndOfInput {
                     expected: "JSON value".to_string(),
                     position: self.position,
@@ -79,7 +77,7 @@ impl JsonParser {
             self.position += 1;
             token
         }
-    }    
+    }
 
     fn peek(&self) -> Option<Token> {
         self.tokens.get(self.position).cloned()
@@ -93,13 +91,13 @@ impl JsonParser {
         let mut hash_items: HashMap<String, JsonValue> = HashMap::new();
         let mut current_key = String::new();
         while let Some(token) = self.tokens.get(self.position).cloned() {
-            println!("Current Position OUTSIDE: {:?}", &token);
             match token {
                 Token::LeftBrace => {
                     self.advance();
                     if let Some(token) = self.peek() {
-                        println!("This is the actual token {:?}", token);
-                        if std::mem::discriminant(&token) == std::mem::discriminant(&Token::RightBrace) {
+                        if std::mem::discriminant(&token)
+                            == std::mem::discriminant(&Token::RightBrace)
+                        {
                             continue;
                         }
                         let parsed_key = self.parse_value()?;
@@ -108,15 +106,15 @@ impl JsonParser {
                             current_key = key.to_string();
                             hash_items.insert(current_key.clone(), JsonValue::Null);
                         } else {
-                            return Err(JsonError::UnexpectedEndOfInput { 
-                                expected: "Json Key".to_string(), 
-                                position: self.position
-                            })
+                            return Err(JsonError::UnexpectedEndOfInput {
+                                expected: "Json Key".to_string(),
+                                position: self.position,
+                            });
                         }
-                    } 
+                    }
                     if let Some(token) = self.peek() {
                         if std::mem::discriminant(&token) == std::mem::discriminant(&Token::Colon) {
-                            continue;   
+                            continue;
                         }
                         return Err(JsonError::UnexpectedEndOfInput {
                             expected: "JSON value".to_string(),
@@ -136,19 +134,22 @@ impl JsonParser {
                     self.advance();
                     let value = self.parse_value()?;
                     hash_items.insert(current_key.clone(), value);
-                    
-                    if let Some(token) = self.peek(){
-                        if std::mem::discriminant(&token) != std::mem::discriminant(&Token::Comma) && std::mem::discriminant(&token) != std::mem::discriminant(&Token::RightBrace){ 
-                            return Err(JsonError::UnexpectedEndOfInput { 
-                                expected: ",".to_string(), 
-                                position: self.position 
-                            })
+
+                    if let Some(token) = self.peek() {
+                        if std::mem::discriminant(&token) != std::mem::discriminant(&Token::Comma)
+                            && std::mem::discriminant(&token)
+                                != std::mem::discriminant(&Token::RightBrace)
+                        {
+                            return Err(JsonError::UnexpectedEndOfInput {
+                                expected: ",".to_string(),
+                                position: self.position,
+                            });
                         }
                     } else {
-                        return Err(JsonError::UnexpectedEndOfInput { 
-                            expected: ",".to_string(), 
-                            position: self.position 
-                        })
+                        return Err(JsonError::UnexpectedEndOfInput {
+                            expected: ",".to_string(),
+                            position: self.position,
+                        });
                     }
                 }
                 _ => {
@@ -169,17 +170,50 @@ impl JsonParser {
                 }
                 Token::RightBracket => {
                     self.advance();
-                    break;
+                    return Ok(JsonValue::Array(array_data));
                 }
                 Token::Comma => {
                     self.advance();
+                    if let Some(token) = self.peek()
+                        && std::mem::discriminant(&token)
+                            == std::mem::discriminant(&Token::RightBracket)
+                    {
+                        return Err(JsonError::UnexpectedEndOfInput {
+                            expected: "JSON Value".to_string(),
+                            position: self.position,
+                        });
+                    }
                 }
                 _ => {
                     array_data.push(self.parse_value()?);
+
+                    if let Some(token) = self.peek()
+                        && std::mem::discriminant(&token) != std::mem::discriminant(&Token::Comma)
+                        && std::mem::discriminant(&token)
+                            != std::mem::discriminant(&Token::RightBracket)
+                    {
+                        return Err(JsonError::UnexpectedEndOfInput {
+                            expected: "JSON Value".to_string(),
+                            position: self.position,
+                        });
+                    }
+
+                    if self.is_at_end()
+                        && std::mem::discriminant(&token)
+                            != std::mem::discriminant(&Token::RightBracket)
+                    {
+                        return Err(JsonError::UnexpectedEndOfInput {
+                            expected: "JSON Value".to_string(),
+                            position: self.position,
+                        });
+                    }
                 }
             }
         }
-        Ok(JsonValue::Array(array_data))
+        Err(JsonError::UnexpectedEndOfInput {
+            expected: "Valid Json".to_string(),
+            position: self.position,
+        })
     }
 }
 
@@ -568,5 +602,62 @@ mod test {
         let result = parser.parse();
         assert!(result.is_err());
         Ok(())
+    }
+
+    #[test]
+    fn test_display_primitives() {
+        assert_eq!(JsonValue::Null.to_string(), "null");
+        assert_eq!(JsonValue::Boolean(true).to_string(), "true");
+        assert_eq!(JsonValue::Boolean(false).to_string(), "false");
+        assert_eq!(JsonValue::Number(42.0).to_string(), "42");
+        assert_eq!(JsonValue::Number(3.14).to_string(), "3.14");
+        assert_eq!(
+            JsonValue::String("hello".to_string()).to_string(),
+            "\"hello\""
+        );
+    }
+
+    #[test]
+    fn test_display_array() {
+        let value = JsonValue::Array(vec![JsonValue::Number(1.0), JsonValue::Number(2.0)]);
+        assert_eq!(value.to_string(), "[1,2]");
+    }
+
+    #[test]
+    fn test_display_empty_containers() {
+        assert_eq!(JsonValue::Array(vec![]).to_string(), "[]");
+        assert_eq!(JsonValue::Object(HashMap::new()).to_string(), "{}");
+    }
+
+    #[test]
+    fn test_display_escape_string() {
+        let value = JsonValue::String("hello\nworld".to_string());
+        assert_eq!(value.to_string(), "\"hello\\nworld\"");
+    }
+
+    #[test]
+    fn test_display_escape_quotes() {
+        let value = JsonValue::String("say \"hi\"".to_string());
+        assert_eq!(value.to_string(), "\"say \\\"hi\\\"\"");
+    }
+
+    #[test]
+    fn test_display_nested() -> Result<()> {
+        let mut parser = JsonParser::new(r#"{"arr": [1, 2]}"#)?;
+        let value = parser.parse()?;
+        let output = value.to_string();
+        // Object key order may vary, so check components
+        assert!(output.contains("\"arr\""));
+        assert!(output.contains("[1,2]"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_display_nested_array() {
+        let value = JsonValue::Array(vec![JsonValue::Array(vec![
+            JsonValue::Number(1.0),
+            JsonValue::Number(2.0),
+        ])]);
+        assert_eq!(value.to_string(), "[[1,2]]");
     }
 }
