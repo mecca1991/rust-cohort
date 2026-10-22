@@ -500,14 +500,14 @@ mod tests {
 
     #[test]
     fn test_tokenize_literals() -> Result<()> {
-        let t1 = Tokenizer::new("true").tokenize()?;
-        assert_eq!(t1, vec![Token::Boolean(true)]);
+        let mut t1 = Tokenizer::new("true");
+        assert_eq!(t1.tokenize()?, vec![Token::Boolean(true)]);
 
-        let t2 = Tokenizer::new("false").tokenize()?;
-        assert_eq!(t2, vec![Token::Boolean(false)]);
+        let mut t2 = Tokenizer::new("false");
+        assert_eq!(t2.tokenize()?, vec![Token::Boolean(false)]);
 
-        let t3 = Tokenizer::new("null").tokenize()?;
-        assert_eq!(t3, vec![Token::Null]);
+        let mut t3 = Tokenizer::new("null");
+        assert_eq!(t3.tokenize()?, vec![Token::Null]);
         Ok(())
     }
 
