@@ -23,6 +23,12 @@ pub enum JsonError {
         sequence: String,
         position: usize,
     },
+    IoError {
+        message: String,
+    },
+    FileNotFound {
+        path: String,
+    },
 }
 
 // TODO: Implement Display trait
@@ -59,6 +65,12 @@ impl fmt::Display for JsonError {
             }
             JsonError::InvalidUnicode { sequence, position } => {
                 write!(f, "Invalid unicode {} at position {}", sequence, position)
+            }
+            JsonError::IoError { message } => {
+                write!(f, "IO Error {}", message)
+            }
+            JsonError::FileNotFound { path } => {
+                write!(f, "File not found at {}", path)
             }
         }
     }

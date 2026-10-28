@@ -1,9 +1,9 @@
-use std::{collections::HashMap};
+use std::collections::HashMap;
+use pyo3::{IntoPyObjectExt, prelude::*};
+
 
 use pyo3::{
-    IntoPyObject, IntoPyObjectExt,
-    exceptions::PyValueError,
-    types::{PyAnyMethods, PyDict},
+    IntoPyObject, PyResult, Python, exceptions::{PyIOError, PyValueError}, types::{PyAnyMethods, PyDict, PyList, PyListMethods},
 };
 
 use crate::{JsonError, JsonParser, JsonValue};
@@ -15,23 +15,23 @@ impl<'py> IntoPyObject<'py> for JsonValue {
 
     fn into_pyobject(self, py: Python<'py>) -> Result<Self::Output, Self::Error> {
         match self {
-            JsonValue::Null => Ok(py.None()),
-            JsonValue::Boolean(b) => Ok(b.into_pyobject(py)?),
-            JsonValue::Number(n) => Ok(n.into_pyobject(py)?),
-            JsonValue::String(s) => Ok(s.into_pyobject(py)?),
+            JsonValue::Null => Ok(py.None().into_bound(py)),
+            JsonValue::Boolean(b) => Ok(b.into_bound_py_any(py)?),
+            JsonValue::Number(n) => Ok(n.into_bound_py_any(py)?),
+            JsonValue::String(s) => Ok(s.into_bound_py_any(py)?),
             JsonValue::Array(arr) => {
-                let py_list = PyList::empty(py);
-                for item in arr {
-                    py_list.append(item.into_pyobject(py)?)?;
+                let items = PyList::empty(py);
+                for item in arr.iter() {
+                    items.append(item.to_owned().into_pyobject(py)?)?;
                 }
-                Ok(py_list)
+                Ok(items.into_any())
             }
             JsonValue::Object(obj) => {
                 let dict_items = PyDict::new(py);
                 for (key, value) in obj {
                     dict_items.set_item(key, value.into_pyobject(py)?)?;
                 }
-                Ok(dict_items)
+                Ok(dict_items.into_any())
             }
         }
     }
@@ -63,27 +63,28 @@ impl From<JsonError> for PyErr {
                 value, position
             )),
             JsonError::InvalidUnicode { sequence, position } => PyValueError::new_err(format!(
-                "Invalide Unicode Sequence '{}' at position {}", sequence, position
+                "Invalide Unicode Sequence '{}' at position {}",
+                sequence, position
             )),
             JsonError::IoError { message } => PyIOError::new_err(message),
             JsonError::FileNotFound { path } => {
                 PyIOError::new_err(format!("File not found: {}", path))
-            } 
+            }
         }
     }
 }
 
 // Python-callable functions
 #[pyfunction]
-fn parse_json(py: Python<'_>, input: &str) -> PyResult<Bound<'_, PyAny>> {
+fn parse_json<'a>(py: Python<'a>, input: &'a str) -> PyResult<Bound<'a, PyAny>> {
     let parsed_data = JsonParser::new(input)?.parse()?;
     parsed_data.into_pyobject(py)
 }
 
 #[pyfunction]
-fn parse_json_file(py: Python<'_>, path: &str) -> PyResult<Bound<'_, PyAny>> {
-    let contents = std::fs::read_to_string(path)?;  // std::io::Error → PyErr
-    let result = JsonParser::new(&contents)?.parse();      // JsonError → PyErr
+fn parse_json_file<'a>(py: Python<'a>, path: &'a str) -> PyResult<Bound<'a, PyAny>> {
+    let contents = std::fs::read_to_string(path)?; // std::io::Error → PyErr
+    let result = JsonParser::new(&contents)?.parse()?; // JsonError → PyErr
     result.into_pyobject(py)
 }
 
@@ -92,12 +93,8 @@ fn parse_json_file(py: Python<'_>, path: &str) -> PyResult<Bound<'_, PyAny>> {
 fn dumps(obj: &Bound<PyAny>, indent: Option<usize>) -> PyResult<String> {
     let converted = py_to_json_value(obj)?;
     match indent {
-        Some(ind) => {
-            Ok(converted.fmt())
-        },
-        None => {
-            Ok(converted.to_string())
-        }
+        Some(_) => Ok(converted.pretty_print()),
+        None => Ok(converted.to_string()),
     }
 }
 
@@ -121,25 +118,28 @@ fn py_to_json_value(obj: &Bound<PyAny>) -> PyResult<JsonValue> {
     }
     // 5. Check list (recurse on elements)
     if let Ok(list) = obj.cast::<PyList>() {
-       // Converting a Python list
+        // Converting a Python list
         let mut arr = Vec::new();
-        for item in list {
+        for item in list.iter() {
             arr.push(py_to_json_value(&item)?);
         }
         return Ok(JsonValue::Array(arr));
     }
     // 6. Check dict (recurse on values)
     if let Ok(dict) = obj.cast::<PyDict>() {
-        let mut dict_items= HashMap::new();
+        let mut dict_items = HashMap::new();
         for (key, value) in dict {
+            let k = key.to_string();
             let converted_value = py_to_json_value(&value)?;
-            dict_items.insert(key, converted_value);
+            dict_items.insert(k, converted_value);
         }
         return Ok(JsonValue::Object(dict_items));
     }
 
     // 7. Unsupported type
-    Err(PyValueError::new_err("Unsupported type for JSON conversion"))
+    Err(PyValueError::new_err(
+        "Unsupported type for JSON conversion",
+    ))
 }
 
 // Module registration

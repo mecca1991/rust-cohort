@@ -149,10 +149,22 @@ impl JsonParser {
                     return Ok(JsonValue::Object(hash_items));
                 }
                 Token::Colon => {
+                    // let key = &current_key.chars().take(0).next();
+                    // match key {
+                    //     None => {
+                    //         return Err(JsonError::UnexpectedToken {
+                    //             expected: "String".to_string(),
+                    //             found: ":".to_string(),
+                    //             position: self.position,
+                    //         });
+                    //     },
+                    //     _ => {
+                            
+                    //     }
+                    // }
                     self.advance();
                     let value = self.parse_value()?;
                     hash_items.insert(current_key.clone(), value);
-
                     // position moved to next after self.advance
                     let next_token = self.tokens.get(self.position);
 
@@ -716,6 +728,12 @@ mod object_tests {
             Some(&JsonValue::String("Alice".to_string()))
         );
         assert_eq!(value.get("missing"), None);
+        Ok(())
+    }
+    #[test]
+    fn test_error_leading_colon_object() -> Result<()> {
+        let result = JsonParser::new("{: 1}")?.parse();
+        assert!(matches!(result, Err(JsonError::UnexpectedToken { .. })));
         Ok(())
     }
 }

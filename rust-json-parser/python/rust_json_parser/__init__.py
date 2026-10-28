@@ -1,0 +1,1 @@
+import _rust_json_parser

@@ -56,6 +56,14 @@ impl JsonValue {
             _ => None,
         }
     }
+    pub fn pretty_print(&self) -> String {
+        match self {
+            JsonValue::String(val) => { 
+                format!("{}\n", val)
+            },
+            _ => self.to_string()
+        }
+    }
 }
 
 impl fmt::Display for JsonValue {
