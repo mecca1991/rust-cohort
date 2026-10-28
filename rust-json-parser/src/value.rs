@@ -56,12 +56,40 @@ impl JsonValue {
             _ => None,
         }
     }
-    pub fn pretty_print(&self) -> String {
+
+    pub fn pretty_print(&self, indent: usize) -> String {
+        let depth = 0;
+        self.pretty_print_recurse(indent, depth)
+    }
+
+    fn pretty_print_recurse(&self, indent: usize, depth: usize) -> String {
+        let indent_spaces = " ".repeat(indent * (depth + 1));
+        let closing_spaces = " ".repeat(indent * depth);
+
+        let mut final_items: Vec<String> = Vec::new();
         match self {
-            JsonValue::String(val) => { 
-                format!("{}\n", val)
-            },
-            _ => self.to_string()
+            JsonValue::Object(items) => {
+                if items.is_empty() {
+                    return "{}".to_string();
+                }
+                for (key, val) in items {
+                    let key = JsonValue::String(key.clone());
+                    let value = val.pretty_print_recurse(indent, depth + 1);
+                    final_items.push(format!("{}{}: {}", indent_spaces, key, value));
+                }
+                format!("{{\n{}\n{}}}", final_items.join(",\n"), closing_spaces)
+            }
+            JsonValue::Array(items) => {
+                if items.is_empty() {
+                    return "[]".to_string();
+                }
+                for item in items {
+                    let value = item.pretty_print_recurse(indent, depth + 1);
+                    final_items.push(format!("{}{}", indent_spaces, value));
+                }
+                format!("[\n{}\n{}]", final_items.join(",\n"), closing_spaces)
+            }
+            _ => self.to_string(),
         }
     }
 }

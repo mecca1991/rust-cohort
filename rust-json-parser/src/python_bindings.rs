@@ -1,9 +1,10 @@
-use std::collections::HashMap;
 use pyo3::{IntoPyObjectExt, prelude::*};
-
+use std::collections::HashMap;
 
 use pyo3::{
-    IntoPyObject, PyResult, Python, exceptions::{PyIOError, PyValueError}, types::{PyAnyMethods, PyDict, PyList, PyListMethods},
+    IntoPyObject, PyResult, Python,
+    exceptions::{PyIOError, PyValueError},
+    types::{PyAnyMethods, PyDict, PyList, PyListMethods},
 };
 
 use crate::{JsonError, JsonParser, JsonValue};
@@ -93,7 +94,10 @@ fn parse_json_file<'a>(py: Python<'a>, path: &'a str) -> PyResult<Bound<'a, PyAn
 fn dumps(obj: &Bound<PyAny>, indent: Option<usize>) -> PyResult<String> {
     let converted = py_to_json_value(obj)?;
     match indent {
-        Some(_) => Ok(converted.pretty_print()),
+        Some(size) => {
+            let val = converted.pretty_print(size);
+            Ok(val)
+        }
         None => Ok(converted.to_string()),
     }
 }

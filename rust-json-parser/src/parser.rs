@@ -149,19 +149,21 @@ impl JsonParser {
                     return Ok(JsonValue::Object(hash_items));
                 }
                 Token::Colon => {
-                    // let key = &current_key.chars().take(0).next();
-                    // match key {
-                    //     None => {
-                    //         return Err(JsonError::UnexpectedToken {
-                    //             expected: "String".to_string(),
-                    //             found: ":".to_string(),
-                    //             position: self.position,
-                    //         });
-                    //     },
-                    //     _ => {
-                            
-                    //     }
-                    // }
+                    let prev_position = self.position.checked_sub(1);
+                    if let Some(pos) = prev_position {
+                        if !matches!(self.tokens.get(pos), Some(Token::String(_))) {
+                            return Err(JsonError::UnexpectedToken {
+                                expected: "String".to_string(),
+                                found: ":".to_string(),
+                                position: self.position,
+                            });
+                        }
+                    } else {
+                        return Err(JsonError::UnexpectedEndOfInput {
+                            expected: "Invalid token position".to_string(),
+                            position: self.position,
+                        });
+                    }
                     self.advance();
                     let value = self.parse_value()?;
                     hash_items.insert(current_key.clone(), value);
