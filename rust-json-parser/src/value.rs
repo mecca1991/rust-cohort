@@ -58,8 +58,7 @@ impl JsonValue {
     }
 
     pub fn pretty_print(&self, indent: usize) -> String {
-        let depth = 0;
-        self.pretty_print_recurse(indent, depth)
+        self.pretty_print_recurse(indent, 0)
     }
 
     fn pretty_print_recurse(&self, indent: usize, depth: usize) -> String {
@@ -251,5 +250,20 @@ mod tests {
             JsonValue::Number(2.0),
         ])]);
         assert_eq!(value.to_string(), "[[1,2]]");
+    }
+    #[test]
+    fn test_pretty_print_escapes_keys_and_values() -> Result<(), JsonError> {
+        let value = JsonValue::Object(HashMap::from([(
+            "say \"hi\"".to_string(),
+            JsonValue::String("line\nbreak".to_string()),
+        )]));
+
+        let pretty = value.pretty_print(2);
+        assert!(pretty.contains(r#""say \"hi\"""#));
+        assert!(pretty.contains(r#""line\nbreak""#));
+
+        let mut parser = JsonParser::new(&pretty)?;
+        assert_eq!(parser.parse()?, value);
+        Ok(())
     }
 }

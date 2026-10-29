@@ -2,7 +2,6 @@ use pyo3::{IntoPyObjectExt, prelude::*};
 use std::collections::HashMap;
 
 use pyo3::{
-    IntoPyObject, PyResult, Python,
     exceptions::{PyIOError, PyValueError},
     types::{PyAnyMethods, PyDict, PyList, PyListMethods},
 };
@@ -22,8 +21,8 @@ impl<'py> IntoPyObject<'py> for JsonValue {
             JsonValue::String(s) => Ok(s.into_bound_py_any(py)?),
             JsonValue::Array(arr) => {
                 let items = PyList::empty(py);
-                for item in arr.iter() {
-                    items.append(item.to_owned().into_pyobject(py)?)?;
+                for item in arr{
+                    items.append(item.into_pyobject(py)?)?;
                 }
                 Ok(items.into_any())
             }
@@ -133,7 +132,7 @@ fn py_to_json_value(obj: &Bound<PyAny>) -> PyResult<JsonValue> {
     if let Ok(dict) = obj.cast::<PyDict>() {
         let mut dict_items = HashMap::new();
         for (key, value) in dict {
-            let k = key.to_string();
+            let k = key.extract::<String>()?;
             let converted_value = py_to_json_value(&value)?;
             dict_items.insert(k, converted_value);
         }
