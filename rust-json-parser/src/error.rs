@@ -1,5 +1,15 @@
 use std::fmt;
 
+/// This module defines the `JsonError` enum, which represents various error types that can occur during JSON parsing. Each variant of the enum provides detailed information about the specific error, including expected and found tokens, positions in the input, and other relevant details. The module also implements the `Display` trait for `JsonError`, allowing for user-friendly error messages, and implements the `std::error::Error` trait to integrate with Rust's error handling ecosystem.
+/// # Example
+/// ```
+/// use json_parser::error::JsonError;
+/// let error = JsonError::UnexpectedToken {
+///     expected: "number".to_string(),
+///     found: "@".to_string(),
+///     position: 5,
+/// };
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub enum JsonError {
     UnexpectedToken {
