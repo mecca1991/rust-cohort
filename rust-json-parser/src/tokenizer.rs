@@ -326,9 +326,6 @@ mod tests {
     // Result type alias for cleaner test signatures
     type Result<T> = std::result::Result<T, JsonError>;
 
-    // Tests will be added at each step below.
-    // String boundary tests - verify inner vs outer quote handling
-
     #[test]
     fn test_empty_braes() -> Result<()> {
         let tokens = Tokenizer::new("{}").tokenize()?;
@@ -549,8 +546,6 @@ mod tests {
     #[test]
     fn test_tokens_struct_creation() {
         let _tokens = Tokenizer::new(r#""hello""#);
-        // Tokenizer should be created without error
-        // Internal state is private, so we test via tokenize()
     }
     #[test]
     fn test_tokenize_number() -> Result<()> {
@@ -581,10 +576,7 @@ mod tests {
     }
     #[test]
     fn test_tokenizer_multiple_tokens() -> Result<()> {
-        // Tests that a single tokenize() call handles multiple tokens
-        // Note: Unlike Python iterators, calling tokenize() again on the same
-        // instance would return empty - the input has been consumed.
-        // Create a new Tokenizer instance if you need to parse new input.
+        // One call collects all tokens from the remaining input.
         let tokens = Tokenizer::new("123 456").tokenize()?;
         assert_eq!(tokens.len(), 2);
         Ok(())

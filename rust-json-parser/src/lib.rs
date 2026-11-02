@@ -26,9 +26,9 @@
 //! # Python support
 //!
 //! The default `python` feature builds the PyO3 bindings for the Python package's
-//! `parse_json`, `parse_json_file`, and `dumps` functions. These functions are
-//! Python entry points; Rust callers use [`JsonParser`]. Disable default features
-//! to build or test the Rust library without Python.
+//! `parse_json`, `parse_json_file`, `dumps`, and `benchmark_performance` functions.
+//! The benchmark compares total parsing times with Python's `json` and
+//! `simplejson` modules and returns milliseconds. 
 //!
 //! # Current limitations
 //!
