@@ -1,55 +1,182 @@
+//! Owned JSON values, typed accessors, and compact or indented formatting.
+//!
+//! Accessors return `None` when a value has the wrong type instead of coercing
+//! it. Objects use a hash map, so neither formatting mode guarantees key order.
+
 use std::{collections::HashMap, fmt};
 
+/// An owned value in a JSON document.
+///
+/// Numbers use `f64`, including numbers written as integers in the input. Object
+/// keys are unique and unordered. Use the typed accessors to borrow strings and
+/// containers, or to copy numeric and boolean values.
+///
+/// [`std::fmt::Display`] produces compact output. Manually constructed values
+/// are not validated before formatting: non-finite numbers and control
+/// characters without a short JSON escape can produce invalid JSON.
+///
+/// # Examples
+///
+/// ```
+/// use rust_json_parser::JsonValue;
+///
+/// let value = JsonValue::Array(vec![JsonValue::Number(42.0), JsonValue::Null]);
+/// assert_eq!(value.get_index(0).and_then(JsonValue::as_f64), Some(42.0));
+/// assert_eq!(value.to_string(), "[42,null]");
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub enum JsonValue {
+    /// The JSON `null` literal.
     Null,
+    /// A JSON `true` or `false` literal.
     Boolean(bool),
+    /// A number stored as a double-precision float; large integers may round.
     Number(f64),
+    /// A decoded string, without surrounding JSON quotes.
     String(String),
+    /// An ordered sequence of values, which may have different types.
     Array(Vec<JsonValue>),
+    /// A map from string keys to values, with unspecified iteration order.
     Object(HashMap<String, JsonValue>),
 }
 
 impl JsonValue {
+    /// Returns whether this value is [`JsonValue::Null`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rust_json_parser::JsonValue;
+    ///
+    /// assert!(JsonValue::Null.is_null());
+    /// assert!(!JsonValue::Boolean(false).is_null());
+    /// ```
     pub fn is_null(&self) -> bool {
         matches!(self, JsonValue::Null)
     }
+    /// Borrows the decoded string, or returns `None` for another variant.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rust_json_parser::JsonValue;
+    ///
+    /// let value = JsonValue::String("hello".to_owned());
+    /// assert_eq!(value.as_str(), Some("hello"));
+    /// assert_eq!(JsonValue::Number(42.0).as_str(), None);
+    /// ```
     pub fn as_str(&self) -> Option<&str> {
         match self {
             JsonValue::String(msg) => Some(msg),
             _ => None,
         }
     }
+    /// Copies the number, or returns `None` for another variant.
+    ///
+    /// Strings containing digits are not converted to numbers.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rust_json_parser::JsonValue;
+    ///
+    /// assert_eq!(JsonValue::Number(42.0).as_f64(), Some(42.0));
+    /// assert_eq!(JsonValue::String("42".to_owned()).as_f64(), None);
+    /// ```
     pub fn as_f64(&self) -> Option<f64> {
         match self {
             JsonValue::Number(val) => Some(*val),
             _ => None,
         }
     }
+    /// Copies the boolean, or returns `None` for another variant.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rust_json_parser::JsonValue;
+    ///
+    /// assert_eq!(JsonValue::Boolean(false).as_bool(), Some(false));
+    /// assert_eq!(JsonValue::Null.as_bool(), None);
+    /// ```
     pub fn as_bool(&self) -> Option<bool> {
         match self {
             JsonValue::Boolean(val) => Some(*val),
             _ => None,
         }
     }
+    /// Borrows the array's elements, or returns `None` for another variant.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rust_json_parser::JsonValue;
+    ///
+    /// let value = JsonValue::Array(vec![JsonValue::Null]);
+    /// assert_eq!(value.as_array().map(Vec::len), Some(1));
+    /// assert_eq!(JsonValue::Null.as_array(), None);
+    /// ```
     pub fn as_array(&self) -> Option<&Vec<JsonValue>> {
         match self {
             JsonValue::Array(val) => Some(val),
             _ => None,
         }
     }
+    /// Borrows the object's entries, or returns `None` for another variant.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rust_json_parser::{JsonParser, JsonValue};
+    ///
+    /// let value = JsonParser::new(r#"{"enabled": true}"#)?.parse()?;
+    /// let object = value.as_object().expect("parsed an object");
+    /// assert_eq!(object.get("enabled"), Some(&JsonValue::Boolean(true)));
+    /// assert_eq!(JsonValue::Null.as_object(), None);
+    /// # Ok::<(), rust_json_parser::JsonError>(())
+    /// ```
     pub fn as_object(&self) -> Option<&HashMap<String, JsonValue>> {
         match self {
             JsonValue::Object(val) => Some(val),
             _ => None,
         }
     }
+    /// Borrows the value associated with `key` in an object.
+    ///
+    /// Returns `None` if the key is absent or this value is not an object.
+    /// A present key containing JSON `null` returns `Some(&JsonValue::Null)`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rust_json_parser::{JsonParser, JsonValue};
+    ///
+    /// let value = JsonParser::new(r#"{"name": "Alice", "nickname": null}"#)?.parse()?;
+    /// assert_eq!(value.get("name").and_then(JsonValue::as_str), Some("Alice"));
+    /// assert_eq!(value.get("nickname"), Some(&JsonValue::Null));
+    /// assert_eq!(value.get("missing"), None);
+    /// # Ok::<(), rust_json_parser::JsonError>(())
+    /// ```
     pub fn get(&self, key: &str) -> Option<&JsonValue> {
         match self {
             JsonValue::Object(obj) => obj.get(key),
             _ => None,
         }
     }
+    /// Borrows the element at the zero-based `index` of an array.
+    ///
+    /// Returns `None` if the index is out of bounds or this value is not an array.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rust_json_parser::JsonValue;
+    ///
+    /// let value = JsonValue::Array(vec![JsonValue::Boolean(true)]);
+    /// assert_eq!(value.get_index(0), Some(&JsonValue::Boolean(true)));
+    /// assert_eq!(value.get_index(1), None);
+    /// assert_eq!(JsonValue::Null.get_index(0), None);
+    /// ```
     pub fn get_index(&self, index: usize) -> Option<&JsonValue> {
         match self {
             JsonValue::Array(arr) => arr.get(index),
@@ -57,10 +184,26 @@ impl JsonValue {
         }
     }
 
+    /// Formats this value with `indent` spaces per nesting level.
+    ///
+    /// Nonempty arrays and objects span multiple lines, even when `indent` is
+    /// zero. Empty containers remain `[]` and `{}`. Scalars use the same output
+    /// as [`std::fmt::Display`], and object key order is unspecified.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rust_json_parser::JsonValue;
+    ///
+    /// let value = JsonValue::Array(vec![JsonValue::Number(1.0), JsonValue::Null]);
+    /// assert_eq!(value.pretty_print(2), "[\n  1,\n  null\n]");
+    /// assert_eq!(value.pretty_print(0), "[\n1,\nnull\n]");
+    /// ```
     pub fn pretty_print(&self, indent: usize) -> String {
         self.pretty_print_recurse(indent, 0)
     }
 
+    /// Formats a subtree at `depth`, aligning its closing delimiter with its parent.
     fn pretty_print_recurse(&self, indent: usize, depth: usize) -> String {
         let indent_spaces = " ".repeat(indent * (depth + 1));
         let closing_spaces = " ".repeat(indent * depth);
@@ -93,6 +236,11 @@ impl JsonValue {
     }
 }
 
+/// Formats compact output, escaping quotes, backslashes, forward slashes
+/// (`/` becomes `\/`), and common controls.
+///
+/// Object key order is unspecified. Other control characters and non-finite
+/// numbers are not validated; see [`JsonValue`] for formatting limitations.
 impl fmt::Display for JsonValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

@@ -1,3 +1,9 @@
+//! Recursive parsing of tokens into owned JSON values.
+//!
+//! [`JsonParser::new`] tokenizes the entire input first. [`JsonParser::parse`]
+//! then reads one value and checks that no tokens remain. Helpers consume
+//! nested arrays and objects using the same token cursor.
+
 use std::collections::HashMap;
 
 use crate::error::JsonError;
@@ -6,12 +12,55 @@ use crate::value::JsonValue;
 
 type Result<T> = std::result::Result<T, JsonError>;
 
+/// A stateful parser over an owned sequence of JSON tokens.
+///
+/// Construction checks tokenization; [`parse`](Self::parse) checks the structure
+/// of a complete document. The parser does not borrow the original input.
+/// Numbers become `f64` values, and later duplicate object keys replace earlier
+/// values. Each parsing call advances the cursor, including on some errors;
+/// construct a new parser to retry the original document.
+///
+/// # Examples
+///
+/// ```
+/// use rust_json_parser::{JsonParser, JsonValue};
+///
+/// let mut parser = JsonParser::new(r#"[true, null, 42]"#)?;
+/// let value = parser.parse()?;
+/// assert_eq!(value.get_index(0), Some(&JsonValue::Boolean(true)));
+/// assert_eq!(value.get_index(2).and_then(JsonValue::as_f64), Some(42.0));
+/// # Ok::<(), rust_json_parser::JsonError>(())
+/// ```
 pub struct JsonParser {
+    /// Tokens produced from the complete input during construction.
     tokens: Vec<Token>,
+    /// Index of the next token to consume, rather than a source-text offset.
     position: usize,
 }
 
 impl JsonParser {
+    /// Tokenizes `input` and creates a parser positioned at its first token.
+    ///
+    /// Successful construction does not guarantee a complete JSON document:
+    /// call [`parse`](Self::parse) to check nesting, separators, and trailing
+    /// tokens. Whitespace-only input constructs a parser but fails when parsed.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`JsonError::UnexpectedEndOfInput`] for an empty input or an
+    /// unterminated string. Unrecognized tokens, invalid numeric candidates,
+    /// and invalid string escapes produce the corresponding [`JsonError`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rust_json_parser::{JsonParser, JsonValue};
+    ///
+    /// let mut parser = JsonParser::new("42")?;
+    /// assert_eq!(parser.parse()?, JsonValue::Number(42.0));
+    /// assert!(JsonParser::new("@").is_err());
+    /// # Ok::<(), rust_json_parser::JsonError>(())
+    /// ```
     pub fn new(input: &str) -> Result<JsonParser> {
         if input.is_empty() {
             return Err(JsonError::UnexpectedEndOfInput {
@@ -26,11 +75,32 @@ impl JsonParser {
         })
     }
 
+    /// Parses one value from the current cursor and requires the input to end.
+    ///
+    /// Use this method immediately after [`new`](Self::new) to parse a complete
+    /// document. On success, the cursor is at the end; another call returns an
+    /// end-of-input error.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`JsonError::UnexpectedToken`] for misplaced tokens or tokens
+    /// remaining after the value. Returns [`JsonError::UnexpectedEndOfInput`]
+    /// when a value or required delimiter is missing at the end of the input.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rust_json_parser::{JsonError, JsonParser, JsonValue};
+    ///
+    /// assert_eq!(JsonParser::new("true")?.parse()?, JsonValue::Boolean(true));
+    /// let result = JsonParser::new("true false")?.parse();
+    /// assert!(matches!(result, Err(JsonError::UnexpectedToken { .. })));
+    /// # Ok::<(), JsonError>(())
+    /// ```
     pub fn parse(&mut self) -> Result<JsonValue> {
         let parsed_data = self.parse_value()?;
 
-        if !self.is_at_end() {
-            let token = self.tokens.get(self.position);
+        if let Some(token) = self.tokens.get(self.position) {
             return Err(JsonError::UnexpectedToken {
                 expected: "End of input".to_string(),
                 found: format!("{:?}", token),
@@ -40,6 +110,28 @@ impl JsonParser {
         Ok(parsed_data)
     }
 
+    /// Parses the next value, leaving any following tokens unconsumed.
+    ///
+    /// Arrays and objects are parsed recursively. Unlike [`parse`](Self::parse),
+    /// this method does not require the value to be the last one in the input.
+    /// Prefer `parse` when validating a complete document.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`JsonError::UnexpectedToken`] for a token or container structure
+    /// that cannot form a value, or [`JsonError::UnexpectedEndOfInput`] when the
+    /// value is missing or incomplete. The cursor is not reset after an error.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rust_json_parser::{JsonParser, JsonValue};
+    ///
+    /// let mut parser = JsonParser::new("1 true")?;
+    /// assert_eq!(parser.parse_value()?, JsonValue::Number(1.0));
+    /// assert_eq!(parser.parse_value()?, JsonValue::Boolean(true));
+    /// # Ok::<(), rust_json_parser::JsonError>(())
+    /// ```
     pub fn parse_value(&mut self) -> Result<JsonValue> {
         let token = self.tokens.get(self.position).cloned();
         if let Some(token) = token {
@@ -82,6 +174,7 @@ impl JsonParser {
         }
     }
 
+    /// Consumes the current token, leaving the cursor unchanged at end of input.
     fn advance(&mut self) -> Option<Token> {
         let token = self.tokens.get(self.position).cloned();
         if self.is_at_end() {
@@ -92,13 +185,16 @@ impl JsonParser {
         }
     }
 
+    /// Looks one token ahead of the current cursor without consuming anything.
     fn peek(&self) -> Option<&Token> {
         self.tokens.get(self.position + 1)
     }
 
+    /// Reports whether every token has been consumed.
     fn is_at_end(&self) -> bool {
         self.position >= self.tokens.len()
     }
+    /// Extracts an owned object key, rejecting non-string values.
     fn get_jsonvalue_string(&self, jsonvalue: JsonValue) -> Result<String> {
         let result = match jsonvalue {
             JsonValue::String(key) => key,
@@ -112,6 +208,7 @@ impl JsonParser {
         };
         Ok(result)
     }
+    /// Checks whether a token can end an array element before a comma.
     fn is_valid_before_comma_array(&self, token: Option<&Token>) -> bool {
         matches!(
             token,
@@ -125,6 +222,7 @@ impl JsonParser {
             )
         )
     }
+    /// Checks whether a token can start an array element after a comma.
     fn is_valid_after_comma_array(&self, token: Option<&Token>) -> bool {
         matches!(
             token,
@@ -139,6 +237,11 @@ impl JsonParser {
         )
     }
 
+    /// Parses object entries after the opening brace has already been consumed.
+    ///
+    /// Consumes the closing brace on success. Requires string keys and valid
+    /// separators, returning a structural error for missing or misplaced tokens.
+    /// Inserting into the map gives the last occurrence of a duplicate key priority.
     fn parse_object(&mut self) -> Result<JsonValue> {
         let mut hash_items: HashMap<String, JsonValue> = HashMap::new();
         let mut current_key = String::new();
@@ -267,6 +370,10 @@ impl JsonParser {
         })
     }
 
+    /// Parses array elements after the opening bracket has already been consumed.
+    ///
+    /// Consumes the closing bracket on success. Missing elements, separators,
+    /// or closing brackets produce a structural error.
     fn parse_array(&mut self) -> Result<JsonValue> {
         let mut array_data: Vec<JsonValue> = Vec::new();
         while let Some(token) = self.tokens.get(self.position).cloned() {

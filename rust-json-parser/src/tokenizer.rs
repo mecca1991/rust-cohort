@@ -1,28 +1,65 @@
+//! Conversion of input characters into JSON punctuation and value tokens.
+//!
+//! Strings are decoded and numbers converted to `f64` before structural parsing.
+//! The tokenizer tracks character indices, not byte offsets, and does not check
+//! matching brackets, object keys, or separators. [`crate::JsonParser`] performs
+//! those checks after tokenization.
+
 use std::char;
 
 use crate::error::JsonError;
 
+/// A punctuation mark or decoded scalar value produced during tokenization.
+///
+/// Tokens do not retain source spans. Structural parser errors therefore use
+/// token indices rather than positions in the original string.
+///
+/// # Examples
+///
+/// ```
+/// use rust_json_parser::Token;
+///
+/// let token = Token::String("hello".to_owned());
+/// assert!(matches!(token, Token::String(text) if text == "hello"));
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
+    /// `{`, the start of an object.
     LeftBrace,
+    /// `}`, the end of an object.
     RightBrace,
+    /// `[`, the start of an array.
     LeftBracket,
+    /// `]`, the end of an array.
     RightBracket,
+    /// `,`, the separator between array elements or object entries.
     Comma,
+    /// `:`, the separator between an object key and its value.
     Colon,
+    /// A string with surrounding quotes removed and escapes decoded.
     String(String),
+    /// A numeric candidate converted to a double-precision float.
     Number(f64),
+    /// The `true` or `false` literal.
     Boolean(bool),
+    /// The `null` literal.
     Null,
 }
 
+/// An internal tokenizer that owns the input as Unicode scalar values.
+///
+/// A successful call to [`tokenize`](Self::tokenize) consumes the remaining
+/// input. The public Rust entry point is [`crate::JsonParser`].
 #[derive(Debug, Clone, PartialEq)]
 pub struct Tokenizer {
+    /// Input characters, allowing the cursor to advance by Unicode scalar value.
     input: Vec<char>,
+    /// Index of the next character to inspect.
     position: usize,
 }
 
 impl Tokenizer {
+    /// Copies `input` into characters without validating or tokenizing it yet.
     pub fn new(input: &str) -> Self {
         let characters = input.chars().collect();
         Self {
@@ -31,6 +68,11 @@ impl Tokenizer {
         }
     }
 
+    /// Decodes an escape with the cursor at the character after the backslash.
+    ///
+    /// Advances past the escape on success. Invalid short escapes return
+    /// `InvalidEscape`; malformed hex or surrogate escapes return `InvalidUnicode`.
+    /// Four-digit Unicode escapes are decoded individually, without pairing surrogates.
     fn get_real_char(&mut self, ch: char) -> Result<char, JsonError> {
         match ch {
             'n' => {
@@ -111,6 +153,8 @@ impl Tokenizer {
             }),
         }
     }
+    /// Converts an already-scanned keyword, rejecting anything except `true`,
+    /// `false`, or `null` with an `UnexpectedToken` error at the current cursor.
     fn tokenize_boolean_string(&mut self, matched_str: &str) -> Result<Token, JsonError> {
         match matched_str {
             "null" => Ok(Token::Null),
@@ -123,6 +167,11 @@ impl Tokenizer {
             }),
         }
     }
+    /// Scans digits, minus signs, and decimal points, then attempts `f64` parsing.
+    ///
+    /// Exponent notation is not scanned. Leading decimal points are rejected;
+    /// other malformed candidates return `InvalidNumber`. This is not a full
+    /// JSON number grammar: some forms such as leading zeroes are accepted.
     fn tokenize_numeric_string(&mut self) -> Result<Token, JsonError> {
         let mut num_string: String = String::new();
         while let Some(value) = self.peek() {
@@ -151,6 +200,16 @@ impl Tokenizer {
             }),
         }
     }
+    /// Consumes the remaining input into tokens, skipping JSON whitespace.
+    ///
+    /// Returns an empty vector for empty or whitespace-only remaining input.
+    /// Container structure is not validated, and the cursor is not reset on
+    /// failure. Calling this again after success returns an empty vector.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`JsonError`] for unknown characters or keywords, numeric
+    /// candidates that cannot be parsed, invalid escapes, or unterminated strings.
     pub fn tokenize(&mut self) -> Result<Vec<Token>, JsonError> {
         let mut tokens: Vec<Token> = Vec::new();
         while let Some(ch) = self.peek() {
@@ -239,6 +298,7 @@ impl Tokenizer {
         Ok(tokens)
     }
 
+    /// Consumes the current character, leaving the cursor unchanged at input end.
     fn advance(&mut self) -> Option<char> {
         let token = self.input.get(self.position).copied();
         if self.is_at_end() {
@@ -249,9 +309,11 @@ impl Tokenizer {
         }
     }
 
+    /// Reads the current character without moving the cursor.
     fn peek(&self) -> Option<char> {
         self.input.get(self.position).copied()
     }
+    /// Reports whether every input character has been consumed.
     fn is_at_end(&self) -> bool {
         self.position >= self.input.len()
     }

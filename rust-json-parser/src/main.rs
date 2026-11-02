@@ -1,13 +1,13 @@
-use rust_json_parser::JsonParser;
-/// This is the main entry point for the Rust JSON parser application.
-/// It demonstrates how to use the `JsonParser` to parse a JSON string and handle the result or any errors that may occur during parsing. The example input is a simple JSON string, and the output will display either the parsed result or an error message.
-/// # Example
-/// ```
-/// let input = r#""The quick brown fox jumps over the lazy dog""#;
-/// let result = JsonParser::new(input);
-/// ```
-fn main() {
+//! Demonstrates parsing a fixed JSON string with the Rust library.
+//!
+//! Run `cargo run --no-default-features` from the crate directory to print the
+//! parse result. This demo does not read arguments or standard input. The Python
+//! package provides that interface through `python -m rust_json_parser`.
 
+use rust_json_parser::JsonParser;
+
+/// Parses the sample string and prints the result or a tokenization error.
+fn main() {
     let input = r#""The quick brown fox jumps over the lazy dog""#;
     let result = JsonParser::new(input);
     match result {
@@ -16,7 +16,7 @@ fn main() {
             println!("The result is: \n{:?}", final_result)
         }
         Err(result) => {
-            println!("An error occured! \n{:?}", result)
+            println!("An error occurred! \n{:?}", result)
         }
     }
 }

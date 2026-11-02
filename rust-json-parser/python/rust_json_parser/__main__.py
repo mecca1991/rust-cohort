@@ -1,3 +1,12 @@
+"""Pretty-print JSON supplied as text, a file path, or standard input.
+
+Run ``python -m rust_json_parser '{"name": "Alice"}'`` after installing the
+extension. An existing file passed as the first argument is read as UTF-8;
+otherwise that argument is parsed as JSON text. With no arguments, all of
+standard input is read. Output uses two-space indentation. Parsing and I/O
+exceptions propagate to the caller.
+"""
+
 import sys
 import os.path
 import rust_json_parser as rjp
