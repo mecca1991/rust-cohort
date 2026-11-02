@@ -1,13 +1,16 @@
 //! Python bindings enabled by the default `python` Cargo feature.
 //!
-//! PyO3 exposes `parse_json`, `parse_json_file`, and `dumps` through the
-//! `_rust_json_parser` extension module. Parsed values become Python `None`,
-//! `bool`, `float`, `str`, `list`, or `dict` objects. Parser errors become
+//! PyO3 exposes `parse_json`, `parse_json_file`, `dumps`, and
+//! `benchmark_performance` through the `_rust_json_parser` extension module.
+//! The benchmark compares parsing times with `json` and `simplejson`.
+//! Parsed values become Python `None`, `bool`, `float`, `str`, `list`, or `dict`
+//! objects. Parser errors become
 //! `ValueError`; file-read errors use PyO3's conversion to `OSError` subclasses.
 //! Python examples below are usage examples, not Rust doctests.
 
 use pyo3::{IntoPyObjectExt, prelude::*};
 use std::collections::HashMap;
+use std::time::Instant;
 
 use pyo3::{
     IntoPyObject, PyResult, Python,
@@ -99,7 +102,8 @@ impl From<JsonError> for PyErr {
 ///
 /// Raises `ValueError` for text this parser rejects. That includes some valid
 /// JSON: exponent notation such as `1e5` and surrogate-pair escapes such as
-/// `"😀"`. Errors constructing Python objects are propagated.
+/// `"\ud83d\ude00"`. Literal emoji characters are accepted. Errors constructing
+/// Python objects are propagated.
 ///
 /// Very deeply nested input overflows the stack and crashes the Python process
 /// instead of raising an exception.
@@ -157,6 +161,8 @@ fn parse_json_file<'a>(py: Python<'a>, path: &'a str) -> PyResult<Bound<'a, PyAn
 /// large integers may lose precision. Output key order is unspecified, and
 /// forward slashes in strings are written as `\/`. Non-finite numbers are not
 /// rejected: `float("nan")` is written as `NaN`, which is not valid JSON.
+/// Control characters without a short JSON escape, such as NUL, are written
+/// literally and also produce invalid JSON.
 ///
 /// `indent=None` selects compact output. A nonnegative integer selects that
 /// many spaces per nesting level; zero still adds line breaks to containers.
@@ -239,7 +245,82 @@ fn py_to_json_value(obj: &Bound<PyAny>) -> PyResult<JsonValue> {
     ))
 }
 
-/// Registers the parsing and serialization functions on the Python extension.
+/// Measures repeated parsing with this parser, Python's `json`, and `simplejson`.
+///
+/// # Arguments
+///
+/// `json_str` is the JSON text to parse on every iteration.
+/// `iterations` defaults to 1000 and must be a nonnegative integer that fits in `usize`. 
+///
+/// # Returns
+///
+/// A tuple `(rust_ms, json_ms, simplejson_ms)` of total elapsed milliseconds for
+/// each parser's loop, in that order.
+///
+/// # Timing
+///
+/// Imports `json` and `simplejson` before measuring the loops. Each parser is called
+/// `iterations` times, and the total time is measured. The Rust parser converts
+/// the parsed value into Python objects, while the Python modules return their
+/// native objects. The benchmark does not include serialization or printing.
+///
+/// # Errors
+/// Raises `ValueError` for parsing failures, `OSError` for file-read failures,
+/// and other exceptions for Python object-conversion failures.
+///
+/// # Examples
+///
+/// ```python
+/// from rust_json_parser import benchmark_performance
+///
+/// rust_ms, json_ms, simplejson_ms = benchmark_performance(
+///     '{"items": [1, true, null]}', iterations=10_000
+/// )
+/// print(f"Rust total: {rust_ms:.0f} ms")
+/// print(f"json total: {json_ms:.0f} ms")
+/// print(f"simplejson total: {simplejson_ms:.0f} ms")
+/// ```
+#[pyfunction]
+#[pyo3(signature = (json_str, iterations=1000))]
+fn benchmark_performance(
+    py: Python<'_>,
+    json_str: &str,
+    iterations: usize,
+) -> PyResult<(f64, f64, f64)> {
+    // Resolve both Python callables before measuring the parsing loops.
+    let json_module = py.import("json")?;
+    let json_loads = json_module.getattr("loads")?;
+
+    let simplejson_module = py.import("simplejson")?;
+    let simplejson_loads = simplejson_module.getattr("loads")?;
+
+    // Include conversion of the parsed Rust value into Python objects.
+    let start = Instant::now();
+    for _ in 0..iterations {
+        let _ = parse_json(py, json_str)?;
+    }
+    let rust_duration = start.elapsed();
+
+    let start_json_module = Instant::now();
+    for _ in 0..iterations {
+        let _ = json_loads.call1((json_str,))?;
+    }
+    let json_module_duration = start_json_module.elapsed();
+
+    let start_simple_json = Instant::now();
+    for _ in 0..iterations {
+        let _ = simplejson_loads.call1((json_str,))?;
+    }
+    let simple_json_duration = start_simple_json.elapsed();
+
+    Ok((
+        rust_duration.as_millis() as f64,
+        json_module_duration.as_millis() as f64,
+        simple_json_duration.as_millis() as f64,
+    ))
+}
+
+/// Registers parsing, serialization, and benchmarking on the Python extension.
 ///
 /// Returns a Python error if adding a function to the module fails.
 #[pymodule]
@@ -247,5 +328,6 @@ fn _rust_json_parser(m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(parse_json, m)?)?;
     m.add_function(wrap_pyfunction!(parse_json_file, m)?)?;
     m.add_function(wrap_pyfunction!(dumps, m)?)?;
+    m.add_function(wrap_pyfunction!(benchmark_performance, m)?)?;
     Ok(())
 }

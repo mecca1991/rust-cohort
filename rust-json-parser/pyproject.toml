@@ -8,6 +8,8 @@ version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
     "pytest>=9.1.1",
+    "typer>=0.9.0",
+    "simplejson>=3.19.0"
 ]
 
 [tool.maturin]
