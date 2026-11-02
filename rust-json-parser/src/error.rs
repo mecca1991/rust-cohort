@@ -22,13 +22,7 @@ pub enum JsonError {
     InvalidUnicode {
         sequence: String,
         position: usize,
-    },
-    IoError {
-        message: String,
-    },
-    FileNotFound {
-        path: String,
-    },
+    }
 }
 
 // TODO: Implement Display trait

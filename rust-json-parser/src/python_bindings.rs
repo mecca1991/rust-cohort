@@ -21,7 +21,7 @@ impl<'py> IntoPyObject<'py> for JsonValue {
             JsonValue::String(s) => Ok(s.into_bound_py_any(py)?),
             JsonValue::Array(arr) => {
                 let items = PyList::empty(py);
-                for item in arr{
+                for item in arr {
                     items.append(item.into_pyobject(py)?)?;
                 }
                 Ok(items.into_any())
@@ -66,10 +66,7 @@ impl From<JsonError> for PyErr {
                 "Invalide Unicode Sequence '{}' at position {}",
                 sequence, position
             )),
-            JsonError::IoError { message } => PyIOError::new_err(message),
-            JsonError::FileNotFound { path } => {
-                PyIOError::new_err(format!("File not found: {}", path))
-            }
+            _ =>  PyIOError::new_err(message)
         }
     }
 }
@@ -138,7 +135,6 @@ fn py_to_json_value(obj: &Bound<PyAny>) -> PyResult<JsonValue> {
         }
         return Ok(JsonValue::Object(dict_items));
     }
-
     // 7. Unsupported type
     Err(PyValueError::new_err(
         "Unsupported type for JSON conversion",
