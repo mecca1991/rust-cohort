@@ -1,47 +1,90 @@
+//! Error types shared by tokenization, parsing, and the Python bindings.
+//!
+//! [`JsonError`] implements [`std::fmt::Display`] for readable messages and
+//! [`std::error::Error`] for use with standard Rust error handling.
+
 use std::fmt;
 
-/// This module defines the `JsonError` enum, which represents various error types that can occur during JSON parsing. Each variant of the enum provides detailed information about the specific error, including expected and found tokens, positions in the input, and other relevant details. The module also implements the `Display` trait for `JsonError`, allowing for user-friendly error messages, and implements the `std::error::Error` trait to integrate with Rust's error handling ecosystem.
-/// # Example
+/// A tokenization, parsing, or file-access failure.
+///
+/// Positions are zero-based, but are not consistently source offsets:
+/// tokenization uses character indices (not UTF-8 byte offsets), while parsing
+/// uses token indices. Some tokenizer errors report a fixed position of zero;
+/// others report the cursor after consuming the offending text. Do not use
+/// these positions directly to slice the original input.
+///
+/// # Examples
+///
 /// ```
-/// use json_parser::error::JsonError;
-/// let error = JsonError::UnexpectedToken {
-///     expected: "number".to_string(),
-///     found: "@".to_string(),
-///     position: 5,
-/// };
+/// use rust_json_parser::{JsonError, JsonParser};
+///
+/// match JsonParser::new("@") {
+///     Err(JsonError::UnexpectedToken { found, position, .. }) => {
+///         assert_eq!(found, "@");
+///         assert_eq!(position, 0);
+///     }
+///     _ => panic!("expected an invalid-token error"),
+/// }
 /// ```
 #[derive(Debug, Clone, PartialEq)]
 pub enum JsonError {
+    /// The input contains an unrecognized character, keyword, or misplaced token.
     UnexpectedToken {
+        /// A description of the expected token or value.
         expected: String,
+        /// The unexpected input or a debug representation of the token.
         found: String,
+        /// The reported character or token index; see the enum's position notes.
         position: usize,
     },
+    /// The input ends before a required value, delimiter, or closing quote.
     UnexpectedEndOfInput {
+        /// A description of what was needed to continue parsing.
         expected: String,
+        /// The reported character or token index; see the enum's position notes.
         position: usize,
     },
+    /// A numeric candidate cannot be converted to an `f64`.
     InvalidNumber {
+        /// Details of the failed conversion, currently the float parser's error.
         value: String,
+        /// The character cursor after scanning the numeric candidate.
         position: usize,
     },
+    /// A backslash in a string is followed by an unsupported escape character.
     InvalidEscape {
+        /// The character immediately following the backslash.
         char: char,
+        /// The character index of the unsupported escape character.
         position: usize,
     },
+    /// A `\uXXXX` escape has invalid hex digits or is not a Unicode scalar value.
+    ///
+    /// Surrogate escapes are rejected, including those in surrogate pairs.
     InvalidUnicode {
+        /// The invalid character or the hex digits collected so far.
         sequence: String,
+        /// The character cursor where validation failed, possibly after the digits.
         position: usize,
     },
+    /// A file operation failed.
+    ///
+    /// The Rust parser does not perform file I/O. This variant is available to
+    /// callers and maps to Python's `OSError` when converted through PyO3.
     IoError {
+        /// A description of the I/O failure.
         message: String,
     },
+    /// A requested file could not be found.
+    ///
+    /// Like [`JsonError::IoError`], this variant is not emitted by the Rust parser.
     FileNotFound {
+        /// The path of the missing file.
         path: String,
     },
 }
 
-// TODO: Implement Display trait
+/// Formats an error with its context and, when available, reported position.
 impl fmt::Display for JsonError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -69,7 +112,7 @@ impl fmt::Display for JsonError {
             JsonError::InvalidEscape { char, position } => {
                 write!(
                     f,
-                    "Invalid escape character {} at position {} ",
+                    "Invalid escape character {} at position {}",
                     char, position
                 )
             }
