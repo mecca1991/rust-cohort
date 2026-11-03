@@ -1,8 +1,8 @@
-use pyo3::{IntoPyObjectExt, prelude::*};
+use pyo3::{IntoPyObjectExt, exceptions::PyTypeError, prelude::*};
 use std::collections::HashMap;
 
 use pyo3::{
-    exceptions::{PyIOError, PyValueError},
+    exceptions::PyValueError,
     types::{PyAnyMethods, PyDict, PyList, PyListMethods},
 };
 
@@ -66,7 +66,6 @@ impl From<JsonError> for PyErr {
                 "Invalide Unicode Sequence '{}' at position {}",
                 sequence, position
             )),
-            _ =>  PyIOError::new_err(message)
         }
     }
 }
@@ -98,6 +97,21 @@ fn dumps(obj: &Bound<PyAny>, indent: Option<usize>) -> PyResult<String> {
     }
 }
 
+fn get_dictionary_key(key: &Bound<PyAny>) -> PyResult<String> {
+    if let Ok(k) = key.extract::<String>() {
+        return Ok(k);
+    } else {
+        let to_json_key = py_to_json_value(key)?;
+        match to_json_key {
+            JsonValue::Null => Ok("null".to_string()),
+            JsonValue::Boolean(b) => Ok(b.to_string()),
+            JsonValue::Number(n) => Ok(n.to_string()),
+            _ => Err(PyTypeError::new_err(
+                "Invalid dictionary key type for JSON conversion. Only strings, numbers, booleans, and null are allowed.",
+            )),
+        }
+    }
+}
 // Helper (not exposed to Python)
 fn py_to_json_value(obj: &Bound<PyAny>) -> PyResult<JsonValue> {
     // 1. Check None first
@@ -129,16 +143,13 @@ fn py_to_json_value(obj: &Bound<PyAny>) -> PyResult<JsonValue> {
     if let Ok(dict) = obj.cast::<PyDict>() {
         let mut dict_items = HashMap::new();
         for (key, value) in dict {
-            let k = key.extract::<String>()?;
-            let converted_value = py_to_json_value(&value)?;
-            dict_items.insert(k, converted_value);
+            let key_str = get_dictionary_key(&key)?;
+            dict_items.insert(key_str, py_to_json_value(&value)?);
         }
         return Ok(JsonValue::Object(dict_items));
     }
     // 7. Unsupported type
-    Err(PyValueError::new_err(
-        "Unsupported type for JSON conversion",
-    ))
+    Err(PyTypeError::new_err("Unsupported type for JSON conversion"))
 }
 
 // Module registration
