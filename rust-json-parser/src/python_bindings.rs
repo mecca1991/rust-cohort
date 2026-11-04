@@ -99,7 +99,7 @@ fn dumps(obj: &Bound<PyAny>, indent: Option<usize>) -> PyResult<String> {
 
 fn get_dictionary_key(key: &Bound<PyAny>) -> PyResult<String> {
     if let Ok(k) = key.extract::<String>() {
-        return Ok(k);
+        Ok(k)
     } else {
         let to_json_key = py_to_json_value(key)?;
         match to_json_key {
