@@ -56,6 +56,41 @@ impl JsonValue {
             _ => None,
         }
     }
+
+    pub fn pretty_print(&self, indent: usize) -> String {
+        self.pretty_print_recurse(indent, 0)
+    }
+
+    fn pretty_print_recurse(&self, indent: usize, depth: usize) -> String {
+        let indent_spaces = " ".repeat(indent * (depth + 1));
+        let closing_spaces = " ".repeat(indent * depth);
+
+        let mut final_items: Vec<String> = Vec::new();
+        match self {
+            JsonValue::Object(items) => {
+                if items.is_empty() {
+                    return "{}".to_string();
+                }
+                for (key, val) in items {
+                    let key = JsonValue::String(key.clone());
+                    let value = val.pretty_print_recurse(indent, depth + 1);
+                    final_items.push(format!("{}{}: {}", indent_spaces, key, value));
+                }
+                format!("{{\n{}\n{}}}", final_items.join(",\n"), closing_spaces)
+            }
+            JsonValue::Array(items) => {
+                if items.is_empty() {
+                    return "[]".to_string();
+                }
+                for item in items {
+                    let value = item.pretty_print_recurse(indent, depth + 1);
+                    final_items.push(format!("{}{}", indent_spaces, value));
+                }
+                format!("[\n{}\n{}]", final_items.join(",\n"), closing_spaces)
+            }
+            _ => self.to_string(),
+        }
+    }
 }
 
 impl fmt::Display for JsonValue {
@@ -215,5 +250,20 @@ mod tests {
             JsonValue::Number(2.0),
         ])]);
         assert_eq!(value.to_string(), "[[1,2]]");
+    }
+    #[test]
+    fn test_pretty_print_escapes_keys_and_values() -> Result<(), JsonError> {
+        let value = JsonValue::Object(HashMap::from([(
+            "say \"hi\"".to_string(),
+            JsonValue::String("line\nbreak".to_string()),
+        )]));
+
+        let pretty = value.pretty_print(2);
+        assert!(pretty.contains(r#""say \"hi\"""#));
+        assert!(pretty.contains(r#""line\nbreak""#));
+
+        let mut parser = JsonParser::new(&pretty)?;
+        assert_eq!(parser.parse()?, value);
+        Ok(())
     }
 }
