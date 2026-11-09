@@ -3,9 +3,8 @@
 //! PyO3 exposes `parse_json`, `parse_json_file`, `dumps`, and
 //! `benchmark_performance` through the `_rust_json_parser` extension module.
 //! The benchmark compares parsing times with `json` and `simplejson`.
-//! Parsed values become Python `None`, `bool`, `float`, `str`, `list`, or `dict`
-//! objects. Parser errors become
-//! `ValueError`; file-read errors use PyO3's conversion to `OSError` subclasses.
+//! Parsed values become Python `None`, `bool`, `float`, `str`, `list`, or `dict`.
+//! Parser errors become `ValueError`; file-read errors become `OSError` or a subclass.
 //! Python examples below are usage examples, not Rust doctests.
 
 use pyo3::{IntoPyObjectExt, prelude::*};
@@ -13,7 +12,7 @@ use std::collections::HashMap;
 use std::time::Instant;
 
 use pyo3::{
-    exceptions::PyValueError,
+    exceptions::{PyTypeError, PyValueError},
     types::{PyAnyMethods, PyDict, PyList, PyListMethods},
 };
 
@@ -52,7 +51,7 @@ impl<'py> IntoPyObject<'py> for JsonValue {
     }
 }
 
-/// Maps parsing errors to `ValueError` and file-related variants to `OSError`.
+/// Maps tokenization and parsing errors to Python's `ValueError`.
 impl From<JsonError> for PyErr {
     fn from(err: JsonError) -> PyErr {
         match err {
@@ -126,9 +125,10 @@ fn parse_json<'a>(py: Python<'a>, input: &'a str) -> PyResult<Bound<'a, PyAny>> 
 ///
 /// # Errors
 ///
-/// Raises an `OSError` subclass if the file cannot be read as UTF-8, including
-/// `FileNotFoundError` for a missing file. Parsing failures raise `ValueError`;
-/// Python object-conversion errors are propagated.
+/// Raises `OSError` or one of its subclasses if the file cannot be read:
+/// `FileNotFoundError` for a missing file, `IsADirectoryError` for a directory,
+/// and plain `OSError` for content that is not valid UTF-8. Parsing failures
+/// raise `ValueError`; Python object-conversion errors are propagated.
 ///
 /// # Examples
 ///
@@ -150,11 +150,15 @@ fn parse_json_file<'a>(py: Python<'a>, path: &'a str) -> PyResult<Bound<'a, PyAn
 /// Serializes a supported Python value to compact or indented text.
 ///
 /// `obj` may contain `None`, booleans, strings, lists, dictionaries, and numbers
-/// that convert to `float`, such as `int`, `float`, and `Decimal`. Dictionary
-/// keys are converted with Python `str()`; keys with the same string
-/// representation can overwrite each other. Numbers pass through `float`, so
-/// large integers may lose precision. Output key order is unspecified, and
-/// forward slashes in strings are written as `\/`. Non-finite numbers are not
+/// that convert to `float`, such as `int`, `float`, and `Decimal`. Numbers pass
+/// through `float`, so large integers may lose precision.
+///
+/// Dictionary keys may be strings, `None`, booleans, or numbers convertible to
+/// `float`. Strings are kept as-is; other keys use JSON scalar spellings, such
+/// as `"null"` and `"true"`. Keys that convert to the same string overwrite earlier
+/// values. Output key order is unspecified.
+///
+/// Forward slashes in strings are written as `\/`. Non-finite numbers are not
 /// rejected: `float("nan")` is written as `NaN`, which is not valid JSON.
 /// Control characters without a short JSON escape, such as NUL, are written
 /// literally and also produce invalid JSON.
@@ -164,9 +168,9 @@ fn parse_json_file<'a>(py: Python<'a>, path: &'a str) -> PyResult<Bound<'a, PyAn
 ///
 /// # Errors
 ///
-/// Raises `ValueError` for unsupported values, such as tuples, sets, or an
-/// `int` too large for a `float`. A negative `indent` raises `OverflowError`,
-/// and a non-integer `indent` raises `TypeError`.
+/// Raises `TypeError` for unsupported values or dictionary keys, including
+/// tuples, sets, and integers too large for a `float`. A negative or out-of-range
+/// `indent` raises `OverflowError`; an incompatible type raises `TypeError`.
 ///
 /// Cyclic containers are not detected: a list or dictionary that contains
 /// itself crashes the Python process instead of raising an exception.
@@ -192,6 +196,8 @@ fn dumps(obj: &Bound<PyAny>, indent: Option<usize>) -> PyResult<String> {
     }
 }
 
+/// Keeps string keys unchanged and formats other supported keys as JSON scalars.
+/// Containers and unsupported key types return `TypeError`.
 fn get_dictionary_key(key: &Bound<PyAny>) -> PyResult<String> {
     if let Ok(k) = key.extract::<String>() {
         Ok(k)
@@ -207,39 +213,31 @@ fn get_dictionary_key(key: &Bound<PyAny>) -> PyResult<String> {
         }
     }
 }
-// Helper (not exposed to Python)
 /// Recursively converts supported Python objects into owned JSON values.
 ///
-/// Boolean extraction precedes numeric extraction because Python booleans are
-/// also integers. Dictionaries stringify their keys; unsupported values return
-/// `ValueError`. Containers must be acyclic because visited objects are not tracked.
+/// Unsupported values return `TypeError`. Containers must be acyclic because
+/// visited objects are not tracked.
 fn py_to_json_value(obj: &Bound<PyAny>) -> PyResult<JsonValue> {
-    // 1. Check None first
     if obj.is_none() {
         return Ok(JsonValue::Null);
     }
-    // 2. Check bool before numbers (critical!)
+    // Check booleans before numbers because Python bool is a subclass of int.
     if let Ok(b) = obj.extract::<bool>() {
         return Ok(JsonValue::Boolean(b));
     }
-    // 3. Check numbers
     if let Ok(n) = obj.extract::<f64>() {
         return Ok(JsonValue::Number(n));
     }
-    // 4. Check string
     if let Ok(s) = obj.extract::<String>() {
         return Ok(JsonValue::String(s));
     }
-    // 5. Check list (recurse on elements)
     if let Ok(list) = obj.cast::<PyList>() {
-        // Converting a Python list
         let mut arr = Vec::new();
         for item in list.iter() {
             arr.push(py_to_json_value(&item)?);
         }
         return Ok(JsonValue::Array(arr));
     }
-    // 6. Check dict (recurse on values)
     if let Ok(dict) = obj.cast::<PyDict>() {
         let mut dict_items = HashMap::new();
         for (key, value) in dict {
@@ -248,7 +246,6 @@ fn py_to_json_value(obj: &Bound<PyAny>) -> PyResult<JsonValue> {
         }
         return Ok(JsonValue::Object(dict_items));
     }
-    // 7. Unsupported type
     Err(PyTypeError::new_err("Unsupported type for JSON conversion"))
 }
 
@@ -256,36 +253,41 @@ fn py_to_json_value(obj: &Bound<PyAny>) -> PyResult<JsonValue> {
 ///
 /// # Arguments
 ///
-/// `json_str` is the JSON text to parse on every iteration.
-/// `iterations` defaults to 1000 and must be a nonnegative integer that fits in `usize`. 
+/// `json_str` is raw JSON text accepted by all three parsers. Input limitations
+/// from `parse_json` apply. `iterations` defaults to 1000 and must be a
+/// nonnegative integer that fits in `usize`. Zero skips parsing but still imports
+/// the Python modules. The `simplejson` package must be installed.
 ///
 /// # Returns
 ///
-/// A tuple `(rust_ms, json_ms, simplejson_ms)` of total elapsed milliseconds for
-/// each parser's loop, in that order.
+/// A tuple `(rust_time, json_time, simplejson_time)` of total elapsed seconds as
+/// Python floats. Each value measures the whole loop, not an average per parse.
 ///
 /// # Timing
 ///
-/// Imports `json` and `simplejson` before measuring the loops. Each parser is called
-/// `iterations` times, and the total time is measured. The Rust parser converts
-/// the parsed value into Python objects, while the Python modules return their
-/// native objects. The benchmark does not include serialization or printing.
+/// Imports and function lookup happen before timing. The loops run sequentially
+/// in tuple order without warm-up runs. Rust timings include conversion to Python
+/// objects; the other loops call each module's `loads` function. Installed module
+/// defaults determine the backends. Serialization and printing are not timed.
 ///
 /// # Errors
-/// Raises `ValueError` for parsing failures, `OSError` for file-read failures,
-/// and other exceptions for Python object-conversion failures.
+///
+/// Import, parsing, and Python object-conversion errors propagate immediately;
+/// no partial timings are returned. A missing `simplejson` raises
+/// `ModuleNotFoundError`. Negative or out-of-range iterations raise `OverflowError`;
+/// incompatible argument types raise `TypeError`.
 ///
 /// # Examples
 ///
 /// ```python
 /// from rust_json_parser import benchmark_performance
 ///
-/// rust_ms, json_ms, simplejson_ms = benchmark_performance(
+/// rust_time, json_time, simplejson_time = benchmark_performance(
 ///     '{"items": [1, true, null]}', iterations=10_000
 /// )
-/// print(f"Rust total: {rust_ms:.0f} ms")
-/// print(f"json total: {json_ms:.0f} ms")
-/// print(f"simplejson total: {simplejson_ms:.0f} ms")
+/// print(f"Rust total: {rust_time:.6f}s")
+/// print(f"json total: {json_time:.6f}s")
+/// print(f"simplejson total: {simplejson_time:.6f}s")
 /// ```
 #[pyfunction]
 #[pyo3(signature = (json_str, iterations=1000))]
@@ -321,9 +323,9 @@ fn benchmark_performance(
     let simple_json_duration = start_simple_json.elapsed();
 
     Ok((
-        rust_duration.as_millis() as f64,
-        json_module_duration.as_millis() as f64,
-        simple_json_duration.as_millis() as f64,
+        rust_duration.as_secs_f64() as f64,
+        json_module_duration.as_secs_f64() as f64,
+        simple_json_duration.as_secs_f64() as f64,
     ))
 }
 

@@ -4,7 +4,7 @@
 ``dumps`` formats Python values. Parsed numbers are floats.
 
 ``benchmark_performance`` compares repeated parsing with Python's ``json`` and
-``simplejson`` modules. It returns total milliseconds in the order Rust, json,
+``simplejson`` modules. It returns total seconds in the order Rust, json,
 simplejson and requires ``simplejson`` to be installed. See each function's
 docstring for accepted inputs, return values, examples, and exceptions.
 """

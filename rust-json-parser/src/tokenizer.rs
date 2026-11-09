@@ -61,7 +61,7 @@ pub struct Tokenizer {
 impl Tokenizer {
     /// Copies `input` into characters without validating or tokenizing it yet.
     pub fn new(input: &str) -> Self {
-        let characters = input.chars().collect();
+        let characters: Vec<char> = input.chars().collect();
         Self {
             input: characters,
             position: 0,
@@ -171,14 +171,11 @@ impl Tokenizer {
     ///
     /// Exponent notation is not scanned. Leading decimal points are rejected;
     /// other malformed candidates return `InvalidNumber`. This is not a full
-    /// JSON number grammar: some forms such as leading zeroes are accepted.
+    /// JSON number grammar: forms such as `007` and `5.` are accepted.
     fn tokenize_numeric_string(&mut self) -> Result<Token, JsonError> {
         let mut num_string: String = String::new();
         while let Some(value) = self.peek() {
-            if !(value.is_numeric()
-                || value.to_string().starts_with("-")
-                || value.to_string().contains("."))
-            {
+            if !(value.is_numeric() || value == '-' || value == '.') {
                 break;
             }
             num_string.push(value);
@@ -323,7 +320,6 @@ impl Tokenizer {
 mod tests {
     use super::*;
 
-    // Result type alias for cleaner test signatures
     type Result<T> = std::result::Result<T, JsonError>;
 
     #[test]
@@ -678,7 +674,6 @@ mod tests {
 
     #[test]
     fn test_unicode_escape_mixed() -> Result<()> {
-        // Mix of regular chars and unicode escapes
         let tokens = Tokenizer::new(r#""Hello \u0057orld""#).tokenize()?;
         assert_eq!(tokens, vec![Token::String("Hello World".to_string())]);
         Ok(())
@@ -686,7 +681,6 @@ mod tests {
 
     #[test]
     fn test_unicode_escape_lowercase() -> Result<()> {
-        // Lowercase hex digits should work too
         let tokens = Tokenizer::new(r#""\u004a""#).tokenize()?;
         assert_eq!(tokens, vec![Token::String("J".to_string())]);
         Ok(())

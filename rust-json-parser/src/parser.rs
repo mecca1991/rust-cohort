@@ -133,8 +133,7 @@ impl JsonParser {
     /// # Ok::<(), rust_json_parser::JsonError>(())
     /// ```
     pub fn parse_value(&mut self) -> Result<JsonValue> {
-        let token = self.tokens.get(self.position).cloned();
-        if let Some(token) = token {
+        if let Some(token) = self.tokens.get(self.position).cloned() {
             match token {
                 Token::Boolean(value) => {
                     self.advance();
@@ -175,8 +174,8 @@ impl JsonParser {
     }
 
     /// Consumes the current token, leaving the cursor unchanged at end of input.
-    fn advance(&mut self) -> Option<Token> {
-        let token = self.tokens.get(self.position).cloned();
+    fn advance(&mut self) -> Option<&Token> {
+        let token = self.tokens.get(self.position);
         if self.is_at_end() {
             token
         } else {
@@ -241,11 +240,13 @@ impl JsonParser {
     ///
     /// Consumes the closing brace on success. Requires string keys and valid
     /// separators, returning a structural error for missing or misplaced tokens.
+    /// A non-string key returns [`JsonError::UnexpectedToken`], although its
+    /// `expected` text currently reads `JSON value` rather than naming a string.
     /// Inserting into the map gives the last occurrence of a duplicate key priority.
     fn parse_object(&mut self) -> Result<JsonValue> {
         let mut hash_items: HashMap<String, JsonValue> = HashMap::new();
         let mut current_key = String::new();
-        while let Some(token) = self.tokens.get(self.position).cloned() {
+        while let Some(token) = self.tokens.get(self.position) {
             match token {
                 Token::RightBrace => {
                     self.advance();
@@ -373,10 +374,12 @@ impl JsonParser {
     /// Parses array elements after the opening bracket has already been consumed.
     ///
     /// Consumes the closing bracket on success. Missing elements, separators,
-    /// or closing brackets produce a structural error.
+    /// or closing brackets produce a structural error. A misplaced comma reports
+    /// the placeholder `Invalid` in `found`; a token that follows an element
+    /// without a comma is rendered as an `Option`, such as `Some(Number(2.0))`.
     fn parse_array(&mut self) -> Result<JsonValue> {
         let mut array_data: Vec<JsonValue> = Vec::new();
-        while let Some(token) = self.tokens.get(self.position).cloned() {
+        while let Some(token) = self.tokens.get(self.position) {
             match token {
                 Token::RightBracket => {
                     self.advance();
@@ -543,7 +546,7 @@ mod test {
         let result = JsonParser::new("@invalid@");
 
         match result {
-            Err(JsonError::UnexpectedToken { .. }) => Ok(()), // Expected
+            Err(JsonError::UnexpectedToken { .. }) => Ok(()),
             _ => panic!("Expected UnexpectedToken error"),
         }
     }
@@ -555,7 +558,7 @@ mod test {
 
     #[test]
     fn test_parser_creation_tokenize_error() {
-        let parser = JsonParser::new(r#""\q""#); // Invalid escape
+        let parser = JsonParser::new(r#""\q""#);
         assert!(parser.is_err());
     }
     #[test]

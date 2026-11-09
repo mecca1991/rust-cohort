@@ -5,7 +5,7 @@
 
 use std::fmt;
 
-/// A tokenization, parsing, or file-access failure.
+/// A tokenization or parsing failure.
 ///
 /// Positions are zero-based, but are not consistently source offsets:
 /// tokenization uses character indices (not UTF-8 byte offsets), while parsing
@@ -32,7 +32,9 @@ pub enum JsonError {
     UnexpectedToken {
         /// A description of the expected token or value.
         expected: String,
-        /// The unexpected input or a debug representation of the token.
+        /// The unexpected input text or a `Debug` rendering of the offending
+        /// token. Some array separator errors render an `Option<Token>` or use
+        /// the placeholder `Invalid` instead.
         found: String,
         /// The reported character or token index; see the enum's position notes.
         position: usize,
@@ -69,7 +71,7 @@ pub enum JsonError {
     },
 }
 
-/// Formats an error with its context and, when available, reported position.
+/// Formats an error with its context and reported position.
 impl fmt::Display for JsonError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -122,7 +124,6 @@ mod tests {
             position: 5,
         };
 
-        // Error should be Debug-printable
         assert!(format!("{:?}", error).contains("UnexpectedToken"));
     }
 
@@ -158,7 +159,6 @@ mod tests {
             position: 0,
         };
 
-        // All variants should be Debug-printable
         assert!(!format!("{:?}", token_error).is_empty());
         assert!(!format!("{:?}", eof_error).is_empty());
         assert!(!format!("{:?}", num_error).is_empty());

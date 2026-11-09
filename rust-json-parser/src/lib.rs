@@ -28,14 +28,14 @@
 //! The default `python` feature builds the PyO3 bindings for the Python package's
 //! `parse_json`, `parse_json_file`, `dumps`, and `benchmark_performance` functions.
 //! The benchmark compares total parsing times with Python's `json` and
-//! `simplejson` modules and returns milliseconds. 
+//! `simplejson` modules and returns total durations in seconds.
 //!
 //! # Current limitations
 //!
 //! Numbers are stored as [`f64`], so large integers may lose precision. The
 //! tokenizer does not support exponent notation or Unicode surrogate-pair
 //! escapes, and its validation is not fully strict (for example, it accepts
-//! leading zeroes in numbers). Parsing and formatting recurse without a depth
+//! the numbers `007` and `5.`). Parsing and formatting recurse without a depth
 //! limit, so deeply nested input can exhaust the stack. Error positions use
 //! different units depending on the parsing stage; see [`JsonError`].
 
@@ -72,7 +72,6 @@ mod tests {
 
     #[test]
     fn test_integration() -> Result<()> {
-        // Test the full parsing pipeline
         let value = JsonParser::new("42.0")?.parse()?;
         assert_eq!(value, JsonValue::Number(42.0));
 
@@ -89,11 +88,9 @@ mod tests {
 
     #[test]
     fn test_error_propagation() -> Result<()> {
-        // Test that errors propagate properly with correct details
         let result = JsonParser::new("@invalid@");
         assert!(result.is_err());
 
-        // Validate error details through pattern matching
         match result {
             Err(JsonError::UnexpectedToken {
                 expected,
