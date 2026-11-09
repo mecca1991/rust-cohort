@@ -1,24 +1,31 @@
-"""Pretty-print JSON or benchmark a fixed sample with three parsers.
+"""Pretty-print JSON or compare parsing times with Rust, json, and simplejson.
 
-Run ``python -m rust_json_parser '{"name": "Alice"}'`` after installing the
-extension. An existing file passed as the input argument is read as UTF-8;
-otherwise the argument is parsed as JSON text. With no input argument, piped
-standard input is read; an interactive terminal shows usage and exits with
-status 1. Explicit input takes precedence over standard input. Output uses
-two-space indentation. Use ``-h`` or ``--help`` to display the available options.
-Arguments are handled directly through ``sys.argv``; at most one input or
-option may be supplied.
+After installing the extension, pass JSON text or a file path::
 
-Parsing and I/O errors are written to standard error with exit status 1;
-invalid command-line arguments exit with status 2. Parse failures and files
-that are not valid UTF-8 are reported as invalid JSON; other read failures are
-reported as file errors.
+    python -m rust_json_parser '{"name": "Alice"}'
 
-Run ``python -m rust_json_parser --benchmark`` without an input argument to
-time 1,000 parses of the fixed sample ``{"key": "value"}`` with this parser,
-Python's ``json`` module, and ``simplejson``. Timings are totals in seconds.
-Benchmark mode ignores standard input and reports whether Rust is faster,
-slower, or equally fast.
+The CLI reads existing files as UTF-8 and treats other inputs as JSON text.
+Output uses two-space indentation. An explicit input takes precedence over
+standard input. Without an input argument, the CLI reads piped input; in an
+interactive terminal, it prints usage and exits with status 1.
+
+To benchmark a UTF-8 JSON file::
+
+    python -m rust_json_parser --benchmark FILE
+
+Each parser parses the file's contents 1,000 times. Timings are totals in
+seconds and exclude file reading. The output reports whether Rust is faster,
+slower, or equally fast. Benchmark mode ignores standard input. Without a file
+argument, it uses the fixed sample ``{"key": "value"}``.
+
+Arguments are read directly from ``sys.argv``. Pretty-printing uses only the
+first argument and ignores the rest. Benchmarking reads a file only when
+exactly one argument follows ``--benchmark``; extra arguments make it use the
+fixed sample instead. Use ``-h`` or ``--help`` to see the options.
+
+Parsing and I/O errors go to standard error and cause exit status 1. Parse
+failures and files that are not valid UTF-8 are reported as invalid JSON;
+other read failures are reported as file errors.
 """
 
 import os.path
@@ -27,7 +34,7 @@ import sys
 import rust_json_parser as rjp
 
 
-USAGE = "usage: python -m rust_json_parser [-h | --help | --benchmark | INPUT]"
+USAGE = "usage: python -m rust_json_parser [-h | --help | --benchmark [FILE] | INPUT]"
 
 
 def read_input(input_data):
@@ -39,22 +46,22 @@ def read_input(input_data):
 
 
 try:
-    if len(sys.argv) > 2:
-        print(USAGE, file=sys.stderr)
-        print("Error: supply only one JSON input, file path, or option", file=sys.stderr)
-        sys.exit(2)
-
     if len(sys.argv) > 1 and sys.argv[1] in ("-h", "--help"):
         print(USAGE)
-        print("\nPretty-print JSON or benchmark parsers.")
-        print("\nINPUT        JSON string or UTF-8 file path; omit to read piped input")
-        print("-h, --help   Show this help message")
-        print("--benchmark  Benchmark a fixed JSON sample")
+        print("\nPretty-print JSON or compare parser timings.")
+        print("\nINPUT               JSON text or UTF-8 file path; omit to read piped input")
+        print("-h, --help          Show this help and exit")
+        print("--benchmark [FILE]  Benchmark a UTF-8 JSON file; omit FILE for the fixed sample")
         sys.exit(0)
 
     if len(sys.argv) > 1 and sys.argv[1] == "--benchmark":
-        small = '{"key": "value"}'
-        rust_time, python_json_time, simplejson_time = rjp.benchmark_performance(small)
+        if len(sys.argv) == 3:
+            with open(sys.argv[2], "r", encoding="utf-8") as file:
+                sample = file.read()
+        else:
+            sample = '{"key": "value"}'
+
+        rust_time, python_json_time, simplejson_time = rjp.benchmark_performance(sample)
 
         print(f"Rust:             {rust_time:.6f}s")
         for name, duration in [
