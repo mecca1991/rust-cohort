@@ -13,3 +13,6 @@ pyo3 = { version = "0.27", optional = true }
 [features]
 default = ["python"]
 python = ["pyo3"]
+
+[profile.release]
+debug = true 
